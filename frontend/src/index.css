@@ -110,7 +110,7 @@ body {
 }
 
 .glass-nav {
-  background: rgba(11, 15, 25, 0.85);
+  background: rgba(11, 15, 25, 0.88);
   backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border-color);
   position: sticky;
@@ -173,7 +173,7 @@ body {
   border-radius: var(--radius-sm);
 }
 
-/* Inputs */
+/* Inputs & Form Validation */
 .input-group {
   display: flex;
   flex-direction: column;
@@ -203,6 +203,18 @@ body {
 .input-field:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.input-field.input-error {
+  border-color: rgba(239, 68, 68, 0.8) !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25) !important;
+}
+
+.field-error-text {
+  font-size: 0.78rem;
+  color: #fca5a5;
+  margin-top: 0.2rem;
+  font-weight: 500;
 }
 
 /* Badges */
@@ -327,6 +339,22 @@ body {
   transform: scale(1.06);
 }
 
+.product-card-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.product-card:hover .product-card-overlay {
+  opacity: 1;
+}
+
 .product-body {
   padding: 1.25rem;
   display: flex;
@@ -376,7 +404,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.55rem 1.1rem;
+  padding: 0.55rem 1.15rem;
   border-radius: 9999px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border-color);
@@ -393,4 +421,21 @@ body {
   color: #fff;
   border-color: var(--primary);
   box-shadow: 0 4px 12px var(--primary-glow);
+}
+
+/* Spin animation */
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive Utilities */
+@media (min-width: 1024px) {
+  .desktop-hero-preview {
+    display: block !important;
+  }
 }

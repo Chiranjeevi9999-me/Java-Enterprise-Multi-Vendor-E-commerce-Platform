@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { CartProvider } from './context/CartContext';
+import { categoryApi } from './api';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import CartDrawer from './components/CartDrawer';
 import HomeCatalog from './pages/HomeCatalog';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -20,6 +23,19 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 
 function AppContent() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    categoryApi.getAll()
+      .then(res => setCategories(res.data))
+      .catch(err => console.error('Failed to fetch categories:', err));
+  }, []);
+
+  const handleOrderPlaced = () => {
+    setRefreshKey(prev => prev + 1);
+  };
 
   return (
     <div className="app-container">
@@ -28,11 +44,28 @@ function AppContent() {
         <div className="bg-blob-2"></div>
       </div>
 
-      <Navbar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
+      <Navbar
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        selectedCategory={selectedCategory}
+        setSelectedCategory={setSelectedCategory}
+        categories={categories}
+      />
 
       <main style={{ flex: 1 }}>
         <Routes>
-          <Route path="/" element={<HomeCatalog searchQuery={searchQuery} />} />
+          <Route
+            path="/"
+            element={
+              <HomeCatalog
+                key={refreshKey}
+                searchQuery={searchQuery}
+                selectedCategory={selectedCategory}
+                setSelectedCategory={setSelectedCategory}
+                categories={categories}
+              />
+            }
+          />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -59,6 +92,8 @@ function AppContent() {
         </Routes>
       </main>
 
+      <CartDrawer onOrderPlaced={handleOrderPlaced} />
+
       <Footer />
     </div>
   );
@@ -68,7 +103,9 @@ export default function App() {
   return (
     <Router>
       <AuthProvider>
-        <AppContent />
+        <CartProvider>
+          <AppContent />
+        </CartProvider>
       </AuthProvider>
     </Router>
   );

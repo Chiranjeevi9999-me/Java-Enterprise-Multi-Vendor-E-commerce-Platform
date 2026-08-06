@@ -11,15 +11,15 @@ import java.util.List;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
-    List<Product> findByStatus(ProductStatus status);
+    List<Product> findByStatusIn(List<ProductStatus> statuses);
     List<Product> findByVendorProfileId(Long vendorProfileId);
-    List<Product> findByCategoryIdAndStatus(Long categoryId, ProductStatus status);
+    List<Product> findByCategoryIdAndStatusIn(Long categoryId, List<ProductStatus> statuses);
 
-    @Query("SELECT p FROM Product p WHERE p.status = :status AND " +
+    @Query("SELECT p FROM Product p WHERE p.status IN :statuses AND " +
            "(LOWER(p.title) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
            "LOWER(p.description) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
            "LOWER(p.brand) LIKE LOWER(CONCAT('%', :query, '%')))")
-    List<Product> searchProducts(@Param("query") String query, @Param("status") ProductStatus status);
+    List<Product> searchProductsInStatuses(@Param("query") String query, @Param("statuses") List<ProductStatus> statuses);
 
-    List<Product> findByFeaturedTrueAndStatus(ProductStatus status);
+    List<Product> findByFeaturedTrueAndStatusIn(List<ProductStatus> statuses);
 }

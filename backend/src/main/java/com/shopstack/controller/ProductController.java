@@ -78,6 +78,22 @@ public class ProductController {
         return ResponseEntity.ok(productService.updateProductStatus(id, status));
     }
 
+    @PutMapping("/{id}/stock")
+    @PreAuthorize("hasAnyRole('ADMIN', 'VENDOR')")
+    public ResponseEntity<Product> updateProductStock(
+            @PathVariable Long id,
+            @RequestParam Integer stockQuantity) {
+        return ResponseEntity.ok(productService.updateStock(id, stockQuantity));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'VENDOR')")
+    public ResponseEntity<Product> updateProduct(
+            @PathVariable Long id,
+            @RequestBody CreateProductRequest request) {
+        return ResponseEntity.ok(productService.updateProduct(id, request));
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'VENDOR')")
     public ResponseEntity<?> deleteProduct(@PathVariable Long id) {

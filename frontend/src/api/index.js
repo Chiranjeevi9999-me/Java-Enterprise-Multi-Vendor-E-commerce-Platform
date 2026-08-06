@@ -11,6 +11,8 @@ export const productApi = {
   getById: (id) => api.get(`/products/${id}`),
   getReviews: (id) => api.get(`/products/${id}/reviews`),
   create: (data) => api.post('/products', data),
+  update: (id, data) => api.put(`/products/${id}`, data),
+  updateStock: (id, stockQuantity) => api.put(`/products/${id}/stock?stockQuantity=${stockQuantity}`),
   updateStatus: (id, status) => api.put(`/products/${id}/status?status=${status}`),
   delete: (id) => api.delete(`/products/${id}`),
   getByVendor: (vendorId) => api.get(`/products/vendor/${vendorId}`),
@@ -27,4 +29,11 @@ export const vendorApi = {
   getMyProfile: () => api.get('/vendors/me'),
   updateStatus: (vendorId, status) => api.put(`/vendors/admin/${vendorId}/status?status=${status}`),
   updateProfile: (data) => api.put('/vendors/profile', data),
+};
+
+export const orderApi = {
+  create: (orderData) => api.post('/orders', orderData),
+  getMyOrders: () => api.get('/orders/my-orders'),
+  getByVendor: (vendorId) => api.get(`/orders/vendor/${vendorId}`),
+  updateStatus: (id, status) => api.put(`/orders/${id}/status?status=${status}`),
 };

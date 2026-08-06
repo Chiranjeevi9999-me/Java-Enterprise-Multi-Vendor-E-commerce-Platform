@@ -27,23 +27,25 @@ public class ProductService {
         this.reviewRepository = reviewRepository;
     }
 
+    private final List<ProductStatus> VISIBLE_STATUSES = List.of(ProductStatus.ACTIVE, ProductStatus.OUT_OF_STOCK);
+
     public List<Product> getAllActiveProducts() {
-        return productRepository.findByStatus(ProductStatus.ACTIVE);
+        return productRepository.findByStatusIn(VISIBLE_STATUSES);
     }
 
     public List<Product> getFeaturedProducts() {
-        return productRepository.findByFeaturedTrueAndStatus(ProductStatus.ACTIVE);
+        return productRepository.findByFeaturedTrueAndStatusIn(VISIBLE_STATUSES);
     }
 
     public List<Product> getProductsByCategory(Long categoryId) {
-        return productRepository.findByCategoryIdAndStatus(categoryId, ProductStatus.ACTIVE);
+        return productRepository.findByCategoryIdAndStatusIn(categoryId, VISIBLE_STATUSES);
     }
 
     public List<Product> searchProducts(String query) {
         if (query == null || query.isBlank()) {
             return getAllActiveProducts();
         }
-        return productRepository.searchProducts(query.trim(), ProductStatus.ACTIVE);
+        return productRepository.searchProductsInStatuses(query.trim(), VISIBLE_STATUSES);
     }
 
     public List<Product> getProductsByVendor(Long vendorId) {
@@ -114,6 +116,47 @@ public class ProductService {
         product.setRating(Math.round(avgRating * 10.0) / 10.0);
         product.setReviewCount(reviews.size());
 
+        return productRepository.save(product);
+    }
+
+    @Transactional
+    public Product updateStock(Long productId, Integer stockQuantity) {
+        if (stockQuantity == null || stockQuantity < 0) {
+            throw new IllegalArgumentException("Stock quantity must be a non-negative integer.");
+        }
+        Product product = getProductById(productId);
+        product.setStockQuantity(stockQuantity);
+        if (stockQuantity == 0) {
+            product.setStatus(ProductStatus.OUT_OF_STOCK);
+        } else if (product.getStatus() == ProductStatus.OUT_OF_STOCK) {
+            product.setStatus(ProductStatus.ACTIVE);
+        }
+        return productRepository.save(product);
+    }
+
+    @Transactional
+    public Product updateProduct(Long productId, CreateProductRequest request) {
+        Product product = getProductById(productId);
+        if (request.getTitle() != null) product.setTitle(request.getTitle());
+        if (request.getDescription() != null) product.setDescription(request.getDescription());
+        if (request.getPrice() != null) product.setPrice(request.getPrice());
+        if (request.getDiscountPrice() != null) product.setDiscountPrice(request.getDiscountPrice());
+        if (request.getStockQuantity() != null) {
+            product.setStockQuantity(request.getStockQuantity());
+            if (request.getStockQuantity() == 0) {
+                product.setStatus(ProductStatus.OUT_OF_STOCK);
+            } else if (product.getStatus() == ProductStatus.OUT_OF_STOCK) {
+                product.setStatus(ProductStatus.ACTIVE);
+            }
+        }
+        if (request.getCategoryId() != null) {
+            Category category = categoryRepository.findById(request.getCategoryId())
+                    .orElseThrow(() -> new RuntimeException("Category not found"));
+            product.setCategory(category);
+        }
+        if (request.getImageUrl() != null && !request.getImageUrl().isBlank()) {
+            product.setImageUrl(request.getImageUrl());
+        }
         return productRepository.save(product);
     }
 

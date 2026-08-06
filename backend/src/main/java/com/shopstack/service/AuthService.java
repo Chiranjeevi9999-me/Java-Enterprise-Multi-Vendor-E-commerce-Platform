@@ -44,7 +44,7 @@ public class AuthService {
         String jwt = tokenProvider.generateToken(authentication);
 
         User user = userRepository.findByEmail(loginRequest.getEmail())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException("Account with email '" + loginRequest.getEmail() + "' not found."));
 
         Long vendorId = null;
         String storeName = null;
@@ -71,7 +71,7 @@ public class AuthService {
     @Transactional
     public AuthResponse register(RegisterRequest registerRequest) {
         if (userRepository.existsByEmail(registerRequest.getEmail())) {
-            throw new RuntimeException("Email address already registered!");
+            throw new RuntimeException("Email address '" + registerRequest.getEmail() + "' is already registered! Please log in or use another email.");
         }
 
         Role userRole = registerRequest.getRole() != null ? registerRequest.getRole() : Role.CUSTOMER;
