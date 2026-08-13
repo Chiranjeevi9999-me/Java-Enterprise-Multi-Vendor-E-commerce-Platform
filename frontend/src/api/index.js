@@ -37,3 +37,17 @@ export const orderApi = {
   getByVendor: (vendorId) => api.get(`/orders/vendor/${vendorId}`),
   updateStatus: (id, status) => api.put(`/orders/${id}/status?status=${status}`),
 };
+
+export const paymentApi = {
+  createOrder: (data) => api.post('/payments/create-order', data),
+  verify: (data) => api.post('/payments/verify', data),
+  handleFailure: (razorpayOrderId, reason) => api.post(`/payments/failure?razorpayOrderId=${razorpayOrderId}&reason=${encodeURIComponent(reason || '')}`),
+  getMyPayments: () => api.get('/payments/my-payments'),
+};
+
+export const adminApi = {
+  getStats: () => api.get('/admin/stats'),
+  getUsers: () => api.get('/admin/users'),
+  toggleUserStatus: (userId) => api.put(`/admin/users/${userId}/toggle-status`),
+};
+

@@ -26,5 +26,11 @@ spring:
         format_sql: true
 
 jwt:
-  secret: 9a6f8b1c4e2d7a9b0c3f5e8d1a4b7c0d3e6f9a2b5c8d1e4f7a0b3c6d9e2f5a8b
+  secret: ${JWT_SECRET:9a6f8b1c4e2d7a9b0c3f5e8d1a4b7c0d3e6f9a2b5c8d1e4f7a0b3c6d9e2f5a8b}
   expirationMs: 86400000 # 24 hours
+
+razorpay:
+  key_id: ${RAZORPAY_KEY_ID:rzp_test_shopstack_key_id}
+  key_secret: ${RAZORPAY_KEY_SECRET:rzp_test_shopstack_secret_key}
+  currency: INR
+

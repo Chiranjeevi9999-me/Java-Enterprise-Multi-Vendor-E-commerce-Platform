@@ -3,6 +3,7 @@ package com.shopstack.service;
 import com.shopstack.dto.CreateOrderRequest;
 import com.shopstack.model.*;
 import com.shopstack.repository.OrderRepository;
+import com.shopstack.repository.PaymentRepository;
 import com.shopstack.repository.ProductRepository;
 import com.shopstack.repository.UserRepository;
 import com.shopstack.repository.VendorProfileRepository;
@@ -18,12 +19,14 @@ public class OrderService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final VendorProfileRepository vendorProfileRepository;
+    private final PaymentRepository paymentRepository;
 
-    public OrderService(OrderRepository orderRepository, ProductRepository productRepository, UserRepository userRepository, VendorProfileRepository vendorProfileRepository) {
+    public OrderService(OrderRepository orderRepository, ProductRepository productRepository, UserRepository userRepository, VendorProfileRepository vendorProfileRepository, PaymentRepository paymentRepository) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
         this.vendorProfileRepository = vendorProfileRepository;
+        this.paymentRepository = paymentRepository;
     }
 
     @Transactional
@@ -34,6 +37,8 @@ public class OrderService {
         if (request.getItems() == null || request.getItems().isEmpty()) {
             throw new IllegalArgumentException("Cart items cannot be empty.");
         }
+
+        PaymentMethod selectedMethod = request.getPaymentMethod() != null ? request.getPaymentMethod() : PaymentMethod.CARD;
 
         // Group order items by vendor
         Map<Long, List<CreateOrderRequest.OrderItemRequest>> itemsByVendor = new HashMap<>();
@@ -69,14 +74,19 @@ public class OrderService {
             double totalAmount = 0.0;
             List<OrderItem> orderItems = new ArrayList<>();
 
+            OrderStatus initialOrderStatus = selectedMethod == PaymentMethod.COD ? OrderStatus.PENDING : OrderStatus.CONFIRMED;
+
             Order order = Order.builder()
                     .orderNumber(orderNumber)
                     .customer(customer)
                     .vendorProfile(vendor)
-                    .status(OrderStatus.CONFIRMED)
-                    .shippingAddress(request.getShippingAddress() != null ? request.getShippingAddress() : "Standard Delivery Address")
+                    .status(initialOrderStatus)
+                    .shippingAddress(request.getShippingAddress() != null ? request.getShippingAddress() : "Veerapunayunipalli, Kadapa, Andhra Pradesh, 516321, India")
                     .totalAmount(0.0)
                     .build();
+
+            order.setPaymentMethod(selectedMethod);
+            order.setPaymentStatus(selectedMethod == PaymentMethod.COD ? PaymentStatus.PENDING_COD : PaymentStatus.PAID);
 
             for (CreateOrderRequest.OrderItemRequest itemReq : vendorItems) {
                 Product product = productRepository.findById(itemReq.getProductId()).get();
@@ -84,13 +94,15 @@ public class OrderService {
                 double subtotal = unitPrice * itemReq.getQuantity();
                 totalAmount += subtotal;
 
-                // Reduce stock quantity
-                int newStock = product.getStockQuantity() - itemReq.getQuantity();
-                product.setStockQuantity(newStock);
-                if (newStock <= 0) {
-                    product.setStatus(ProductStatus.OUT_OF_STOCK);
+                // For direct order creation, deduct stock only if confirmed immediately (online payment)
+                if (initialOrderStatus == OrderStatus.CONFIRMED) {
+                    int newStock = Math.max(0, product.getStockQuantity() - itemReq.getQuantity());
+                    product.setStockQuantity(newStock);
+                    if (newStock <= 0) {
+                        product.setStatus(ProductStatus.OUT_OF_STOCK);
+                    }
+                    productRepository.save(product);
                 }
-                productRepository.save(product);
 
                 OrderItem orderItem = OrderItem.builder()
                         .order(order)
@@ -121,11 +133,36 @@ public class OrderService {
         return orderRepository.findByVendorProfileIdOrderByCreatedAtDesc(vendorId);
     }
 
+    /**
+     * Update Order Status (Deducts stock EXACTLY ONCE for COD orders when transition to CONFIRMED happens).
+     */
     @Transactional
-    public Order updateOrderStatus(Long orderId, OrderStatus status) {
+    public Order updateOrderStatus(Long orderId, OrderStatus newStatus) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found with ID: " + orderId));
-        order.setStatus(status);
+
+        OrderStatus previousStatus = order.getStatus();
+
+        // Stock deduction check for COD order confirmation (PENDING -> CONFIRMED)
+        if (previousStatus == OrderStatus.PENDING && newStatus == OrderStatus.CONFIRMED) {
+            order.setStatus(OrderStatus.CONFIRMED);
+            order.setPaymentStatus(PaymentStatus.PAID);
+
+            for (OrderItem item : order.getItems()) {
+                Product product = item.getProduct();
+                int currentStock = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+                int newStock = Math.max(0, currentStock - item.getQuantity());
+
+                product.setStockQuantity(newStock);
+                if (newStock <= 0) {
+                    product.setStatus(ProductStatus.OUT_OF_STOCK);
+                }
+                productRepository.save(product);
+            }
+        } else {
+            order.setStatus(newStatus);
+        }
+
         return orderRepository.save(order);
     }
 }

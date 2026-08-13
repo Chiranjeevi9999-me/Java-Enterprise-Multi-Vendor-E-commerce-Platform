@@ -138,15 +138,15 @@ const Navbar = ({ searchQuery, setSearchQuery, selectedCategory, setSelectedCate
           {/* Actions & Role Links */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
             
-            {/* My Orders Button */}
+            {/* My Orders Link */}
             {user && (
-              <button
-                onClick={() => setShowMyOrders(true)}
+              <Link
+                to="/orders"
                 className="btn btn-secondary btn-sm"
                 title="View order history"
               >
                 <PackageCheck size={16} /> My Orders
-              </button>
+              </Link>
             )}
 
             {isVendor && (

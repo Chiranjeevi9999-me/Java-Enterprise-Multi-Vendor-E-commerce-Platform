@@ -12,6 +12,7 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import VendorDashboard from './pages/VendorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import MyOrdersPage from './pages/MyOrdersPage';
 
 // Protected Route wrappers
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -69,6 +70,15 @@ function AppContent() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          
+          <Route
+            path="/orders"
+            element={
+              <ProtectedRoute allowedRoles={['CUSTOMER', 'VENDOR', 'ADMIN']}>
+                <MyOrdersPage />
+              </ProtectedRoute>
+            }
+          />
           
           <Route
             path="/vendor"

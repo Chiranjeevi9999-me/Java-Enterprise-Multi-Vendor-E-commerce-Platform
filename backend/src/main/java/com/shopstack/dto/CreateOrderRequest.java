@@ -11,6 +11,8 @@ public class CreateOrderRequest {
 
     private String shippingAddress;
 
+    private com.shopstack.model.PaymentMethod paymentMethod = com.shopstack.model.PaymentMethod.CARD;
+
     public CreateOrderRequest() {}
 
     public CreateOrderRequest(List<OrderItemRequest> items, String shippingAddress) {
@@ -23,6 +25,9 @@ public class CreateOrderRequest {
 
     public String getShippingAddress() { return shippingAddress; }
     public void setShippingAddress(String shippingAddress) { this.shippingAddress = shippingAddress; }
+
+    public com.shopstack.model.PaymentMethod getPaymentMethod() { return paymentMethod; }
+    public void setPaymentMethod(com.shopstack.model.PaymentMethod paymentMethod) { this.paymentMethod = paymentMethod; }
 
     public static class OrderItemRequest {
         @NotNull(message = "Product ID is required")

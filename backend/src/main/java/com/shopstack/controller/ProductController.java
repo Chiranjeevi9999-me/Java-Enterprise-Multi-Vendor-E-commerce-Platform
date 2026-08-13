@@ -9,10 +9,12 @@ import com.shopstack.security.UserPrincipal;
 import com.shopstack.service.ProductService;
 import com.shopstack.service.VendorService;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -73,31 +75,50 @@ public class ProductController {
     @PutMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('ADMIN', 'VENDOR')")
     public ResponseEntity<Product> updateProductStatus(
+            @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long id,
             @RequestParam ProductStatus status) {
+        validateVendorOwnership(principal, id);
         return ResponseEntity.ok(productService.updateProductStatus(id, status));
     }
 
     @PutMapping("/{id}/stock")
     @PreAuthorize("hasAnyRole('ADMIN', 'VENDOR')")
     public ResponseEntity<Product> updateProductStock(
+            @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long id,
             @RequestParam Integer stockQuantity) {
+        validateVendorOwnership(principal, id);
         return ResponseEntity.ok(productService.updateStock(id, stockQuantity));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'VENDOR')")
     public ResponseEntity<Product> updateProduct(
+            @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long id,
             @RequestBody CreateProductRequest request) {
+        validateVendorOwnership(principal, id);
         return ResponseEntity.ok(productService.updateProduct(id, request));
     }
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'VENDOR')")
-    public ResponseEntity<?> deleteProduct(@PathVariable Long id) {
+    public ResponseEntity<?> deleteProduct(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable Long id) {
+        validateVendorOwnership(principal, id);
         productService.deleteProduct(id);
         return ResponseEntity.ok(Map.of("message", "Product deleted successfully"));
+    }
+
+    private void validateVendorOwnership(UserPrincipal principal, Long productId) {
+        if (!principal.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))) {
+            VendorProfile profile = vendorService.getVendorByUserId(principal.getId());
+            Product product = productService.getProductById(productId);
+            if (!product.getVendorProfile().getId().equals(profile.getId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied: You can only modify your store's products.");
+            }
+        }
     }
 }
