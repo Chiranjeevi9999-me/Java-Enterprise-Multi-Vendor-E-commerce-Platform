@@ -115,7 +115,13 @@ const CartDrawer = ({ onOrderPlaced }) => {
       const res = await paymentApi.createOrder(payload);
       const paymentOrderData = res.data;
 
-      if (window.Razorpay) {
+      const keyStr = String(paymentOrderData.keyId || '');
+      const isRealRazorpayKey = (keyStr.startsWith('rzp_live_') || keyStr.startsWith('rzp_test_')) && 
+        !keyStr.includes('shopstack') && 
+        !keyStr.includes('mock') && 
+        !keyStr.includes('COD_MODE');
+
+      if (window.Razorpay && isRealRazorpayKey) {
         const options = {
           key: paymentOrderData.keyId,
           amount: paymentOrderData.amountInPaise,
@@ -165,7 +171,7 @@ const CartDrawer = ({ onOrderPlaced }) => {
         const razorpayInstance = new window.Razorpay(options);
         razorpayInstance.open();
       } else {
-        // Simulated verification fallback if script is blocked
+        // Simulated test mode verification if script is blocked or default placeholder key is used
         const simulatedPaymentId = 'pay_simulated_' + Date.now();
         const verifyRes = await paymentApi.verify({
           razorpayOrderId: paymentOrderData.razorpayOrderId,
