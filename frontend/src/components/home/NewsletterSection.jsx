@@ -22,7 +22,7 @@ const NewsletterSection = () => {
 
   return (
     <div style={{ margin: '3.5rem 0' }}>
-      <div
+      {/* <div
         className="glass-panel"
         style={{
           padding: '3rem 2.5rem',
@@ -98,7 +98,7 @@ const NewsletterSection = () => {
           </div>
         </div>
 
-      </div>
+      </div> */}
     </div>
   );
 };

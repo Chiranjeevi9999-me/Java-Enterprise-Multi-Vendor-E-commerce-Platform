@@ -45,7 +45,7 @@ public class Payment {
 
     public Payment() {}
 
-    public Payment(Long id, String razorpayOrderId, String razorpayPaymentId, String razorpaySignature, Double amount, String currency, PaymentStatus status, User customer, String orderIdsJson, String failureReason, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    public Payment(Long id, String razorpayOrderId, String razorpayPaymentId, String razorpaySignature, Double amount, String currency, PaymentStatus status, PaymentMethod paymentMethod, User customer, String orderIdsJson, String failureReason, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.razorpayOrderId = razorpayOrderId;
         this.razorpayPaymentId = razorpayPaymentId;
@@ -53,6 +53,7 @@ public class Payment {
         this.amount = amount;
         this.currency = currency != null ? currency : "INR";
         this.status = status != null ? status : PaymentStatus.PENDING;
+        this.paymentMethod = paymentMethod != null ? paymentMethod : PaymentMethod.CARD;
         this.customer = customer;
         this.orderIdsJson = orderIdsJson;
         this.failureReason = failureReason;
@@ -125,6 +126,7 @@ public class Payment {
         private Double amount;
         private String currency = "INR";
         private PaymentStatus status = PaymentStatus.PENDING;
+        private PaymentMethod paymentMethod = PaymentMethod.CARD;
         private User customer;
         private String orderIdsJson;
         private String failureReason;
@@ -138,6 +140,7 @@ public class Payment {
         public PaymentBuilder amount(Double amount) { this.amount = amount; return this; }
         public PaymentBuilder currency(String currency) { this.currency = currency; return this; }
         public PaymentBuilder status(PaymentStatus status) { this.status = status; return this; }
+        public PaymentBuilder paymentMethod(PaymentMethod paymentMethod) { this.paymentMethod = paymentMethod; return this; }
         public PaymentBuilder customer(User customer) { this.customer = customer; return this; }
         public PaymentBuilder orderIdsJson(String orderIdsJson) { this.orderIdsJson = orderIdsJson; return this; }
         public PaymentBuilder failureReason(String failureReason) { this.failureReason = failureReason; return this; }
@@ -145,7 +148,7 @@ public class Payment {
         public PaymentBuilder updatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
 
         public Payment build() {
-            return new Payment(id, razorpayOrderId, razorpayPaymentId, razorpaySignature, amount, currency, status, customer, orderIdsJson, failureReason, createdAt, updatedAt);
+            return new Payment(id, razorpayOrderId, razorpayPaymentId, razorpaySignature, amount, currency, status, paymentMethod, customer, orderIdsJson, failureReason, createdAt, updatedAt);
         }
     }
 }

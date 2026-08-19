@@ -41,7 +41,7 @@ public class PaymentService {
                 .orElseThrow(() -> new RuntimeException("Customer user not found"));
 
         if (request.getItems() == null || request.getItems().isEmpty()) {
-            throw new IllegalArgumentException("Cart items cannot be empty for checkout.");
+            throw new IllegalArgumentException(" items cannot be empty for checkout.");
         }
 
         PaymentMethod selectedMethod = request.getPaymentMethod() != null ? request.getPaymentMethod() : PaymentMethod.CARD;

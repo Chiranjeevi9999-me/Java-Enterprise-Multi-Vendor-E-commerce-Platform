@@ -44,4 +44,13 @@ public class AuthController {
                 "authorities", principal.getAuthorities()
         ));
     }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Map<String, String>> forgotPassword(@RequestBody Map<String, String> request) {
+        String email = request.get("email");
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Email is required"));
+        }
+        return ResponseEntity.ok(authService.forgotPassword(email));
+    }
 }

@@ -18,6 +18,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
+
 @Service
 public class AuthService {
 
@@ -104,5 +106,16 @@ public class AuthService {
         }
 
         return login(new LoginRequest(registerRequest.getEmail(), registerRequest.getPassword()));
+    }
+
+    public Map<String, String> forgotPassword(String email) {
+        if (!userRepository.existsByEmail(email)) {
+            throw new RuntimeException("If this email is registered, you will receive a reset link shortly.");
+        }
+        
+        // Placeholder for actual email service integration
+        // Here we would normally generate a token, save it, and email it.
+        
+        return Map.of("message", "If this email is registered, you will receive a reset link shortly.");
     }
 }

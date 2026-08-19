@@ -5,7 +5,6 @@ import { CartProvider } from './context/CartContext';
 import { categoryApi } from './api';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
-import CartDrawer from './components/CartDrawer';
 import HomeCatalog from './pages/HomeCatalog';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -13,6 +12,8 @@ import ForgotPassword from './pages/ForgotPassword';
 import VendorDashboard from './pages/VendorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import MyOrdersPage from './pages/MyOrdersPage';
+import CartPage from './pages/CartPage';
+import CheckoutPage from './pages/CheckoutPage';
 
 // Protected Route wrappers
 const ProtectedRoute = ({ children, allowedRoles }) => {
@@ -70,6 +71,8 @@ function AppContent() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/checkout" element={<ProtectedRoute allowedRoles={['CUSTOMER', 'VENDOR', 'ADMIN']}><CheckoutPage /></ProtectedRoute>} />
           
           <Route
             path="/orders"
@@ -101,8 +104,6 @@ function AppContent() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
-
-      <CartDrawer onOrderPlaced={handleOrderPlaced} />
 
       <Footer />
     </div>

@@ -32,17 +32,17 @@ const Navbar = ({ searchQuery, setSearchQuery, selectedCategory, setSelectedCate
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#818cf8' }}>
-              <MapPin size={13} />
-              <span>Deliver to <strong>Enterprise Hub (10001)</strong></span>
+              {/* <MapPin size={13} /> */}
+              <span> <strong></strong></span>
             </div>
             <span style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
-            <span style={{ color: '#34d399', fontWeight: 600 }}>100% Verified Vendor Guarantee</span>
+            <span style={{ color: '#34d399', fontWeight: 600 }}>100% Verified Vendor </span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-            <span style={{ color: 'var(--text-subtle)' }}>24/7 Corporate Support</span>
+            <span style={{ color: 'var(--text-subtle)' }}>24/7 Customer Support </span>
             <span style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
-            <Link to="/register" style={{ color: '#f472b6', textDecoration: 'none', fontWeight: 600 }}>Become a Merchant</Link>
+            <Link to="/register" style={{ color: '#f472b6', textDecoration: 'none', fontWeight: 600 }}></Link>
           </div>
 
         </div>
@@ -161,9 +161,9 @@ const Navbar = ({ searchQuery, setSearchQuery, selectedCategory, setSelectedCate
               </Link>
             )}
 
-            {/* Shopping Cart Drawer Trigger */}
-            <button
-              onClick={() => setIsCartOpen(true)}
+            {/* Shopping Cart Trigger */}
+            <Link
+              to="/cart"
               className="btn btn-secondary btn-sm"
               style={{ position: 'relative', padding: '0.5rem 0.75rem' }}
               title="Shopping Cart"
@@ -191,13 +191,15 @@ const Navbar = ({ searchQuery, setSearchQuery, selectedCategory, setSelectedCate
                   {cartCount}
                 </span>
               )}
-            </button>
+            </Link>
 
             {/* User Profile / Login */}
             {user ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(255,255,255,0.04)', padding: '0.35rem 0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff', lineHeight: 1.1 }}>{user.fullName}</div>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff', lineHeight: 1.1 }}>
+                    {user.role === 'CUSTOMER' ? (user.fullName === 'Sarah Jenkins' || !user.fullName ? 'Chiru' : user.fullName) : (user.fullName || 'User')}
+                  </div>
                   <RoleBadge role={user.role} />
                 </div>
                 

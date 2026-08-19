@@ -4,6 +4,7 @@ export const authApi = {
   login: (credentials) => api.post('/auth/login', credentials),
   register: (userData) => api.post('/auth/register', userData),
   getMe: () => api.get('/auth/me'),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
 };
 
 export const productApi = {
@@ -47,7 +48,14 @@ export const paymentApi = {
 
 export const adminApi = {
   getStats: () => api.get('/admin/stats'),
+  getAnalytics: (range = '30D') => api.get(`/admin/analytics?range=${range}`),
+  getVendorsWithMetrics: () => api.get('/admin/vendors'),
+  updateVendorCommission: (vendorId, commissionRate) => api.put(`/admin/vendors/${vendorId}/commission`, { commissionRate }),
+  getAllOrders: (params) => api.get('/admin/orders', { params }),
+  updateOrderStatus: (orderId, status) => api.put(`/admin/orders/${orderId}/status?status=${status}`),
+  getCommissionSummary: () => api.get('/admin/commissions'),
+  getSystemHealth: () => api.get('/admin/system/health'),
+  getReport: (type = 'SALES', range = 'ALL') => api.get(`/admin/reports?type=${type}&range=${range}`),
   getUsers: () => api.get('/admin/users'),
   toggleUserStatus: (userId) => api.put(`/admin/users/${userId}/toggle-status`),
 };
-

@@ -35,7 +35,7 @@ public class OrderService {
                 .orElseThrow(() -> new RuntimeException("Customer not found"));
 
         if (request.getItems() == null || request.getItems().isEmpty()) {
-            throw new IllegalArgumentException("Cart items cannot be empty.");
+            throw new IllegalArgumentException(" items cannot be empty.");
         }
 
         PaymentMethod selectedMethod = request.getPaymentMethod() != null ? request.getPaymentMethod() : PaymentMethod.CARD;
@@ -131,6 +131,10 @@ public class OrderService {
 
     public List<Order> getOrdersByVendor(Long vendorId) {
         return orderRepository.findByVendorProfileIdOrderByCreatedAtDesc(vendorId);
+    }
+
+    public boolean isOrderOwnedByVendor(Long orderId, Long vendorId) {
+        return orderRepository.existsByIdAndVendorProfileId(orderId, vendorId);
     }
 
     /**

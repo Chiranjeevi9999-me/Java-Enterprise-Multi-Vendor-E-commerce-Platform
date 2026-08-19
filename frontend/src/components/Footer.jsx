@@ -40,17 +40,6 @@ const Footer = () => {
             </ul>
           </div>
 
-          {/* Merchant Network */}
-          <div>
-            <h4 style={{ color: '#fff', fontSize: '0.95rem', fontWeight: 700, marginBottom: '1rem', letterSpacing: '0.02em' }}>Merchant Network</h4>
-            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.6rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-              <li>Vendor Onboarding Portal</li>
-              <li>Commission & Payout Rates</li>
-              <li>Inventory Management Specs</li>
-              <li>Seller Dashboard & Analytics</li>
-              <li>Merchant Compliance Guidelines</li>
-            </ul>
-          </div>
 
           {/* Architecture Specs */}
           <div>

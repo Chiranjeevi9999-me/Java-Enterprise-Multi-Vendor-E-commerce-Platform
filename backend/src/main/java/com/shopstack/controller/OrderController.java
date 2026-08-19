@@ -71,10 +71,9 @@ public class OrderController {
         // Vendor isolation check for updating order status
         if (!principal.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))) {
             VendorProfile profile = vendorService.getVendorByUserId(principal.getId());
-            Order order = orderService.getOrdersByVendor(profile.getId()).stream()
-                    .filter(o -> o.getId().equals(id))
-                    .findFirst()
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied: You do not own this order."));
+            if (!orderService.isOrderOwnedByVendor(id, profile.getId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied: You do not own this order.");
+            }
         }
 
         return ResponseEntity.ok(orderService.updateOrderStatus(id, status));

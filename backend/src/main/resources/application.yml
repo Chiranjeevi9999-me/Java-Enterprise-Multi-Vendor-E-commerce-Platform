@@ -30,7 +30,6 @@ jwt:
   expirationMs: 86400000 # 24 hours
 
 razorpay:
-  key_id: ${RAZORPAY_KEY_ID:rzp_test_shopstack_key_id}
-  key_secret: ${RAZORPAY_KEY_SECRET:rzp_test_shopstack_secret_key}
+  key_id: ${RAZORPAY_KEY_ID:rzp_test_TQoPbBJidnAEvz}
+  key_secret: ${RAZORPAY_KEY_SECRET:hqjk19ry3jRuLxv04CYMkyHn}
   currency: INR
-

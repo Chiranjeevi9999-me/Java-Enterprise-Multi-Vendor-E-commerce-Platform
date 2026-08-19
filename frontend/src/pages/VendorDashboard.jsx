@@ -21,8 +21,8 @@ const VendorDashboard = () => {
     setLoading(true);
     try {
       const [profRes, catsRes] = await Promise.all([
-        vendorApi.getMyProfile(),
-        categoryApi.getAll(),
+        vendorApi.getMyProfile().catch(() => ({ data: null })),
+        categoryApi.getAll().catch(() => ({ data: [] })),
       ]);
       setProfile(profRes.data);
       setCategories(catsRes.data);
@@ -328,7 +328,7 @@ const VendorDashboard = () => {
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '0.75rem', fontSize: '0.85rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b' }}>
-                      <MapPin size={14} /> Deliver to: {ord.shippingAddress}
+                      <MapPin size={14} /> : {ord.shippingAddress}
                     </div>
 
                     <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>

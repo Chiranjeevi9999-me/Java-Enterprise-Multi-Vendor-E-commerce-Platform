@@ -66,7 +66,7 @@ const HomeCatalog = ({ searchQuery, selectedCategory, setSelectedCategory, categ
             <span style={{ fontSize: '0.78rem', color: 'var(--primary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               {isFiltered ? 'Active Search & Category Filter' : 'Verified Vendor Inventory'}
             </span>
-            <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', marginTop: '0.2rem' }}>
+            <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#d41111', letterSpacing: '-0.02em', marginTop: '0.2rem' }}>
               {selectedCategory
                 ? `Category: ${categories.find(c => c.id === selectedCategory)?.name || 'Filtered Products'}`
                 : searchQuery

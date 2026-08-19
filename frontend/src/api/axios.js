@@ -21,4 +21,17 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Interceptor to handle global 401/403 errors (session expiration or server restarts)
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      localStorage.removeItem('shopstack_token');
+      localStorage.removeItem('shopstack_user');
+      window.location.href = '/login?session_expired=true';
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;

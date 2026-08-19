@@ -11,7 +11,7 @@ const AddProductModal = ({ categories, onClose, onSuccess }) => {
     discountPrice: '',
     stockQuantity: '',
     imageUrl: '',
-    categoryId: categories[0]?.id || '',
+    categoryId: '',
   });
 
   const [error, setError] = useState('');
@@ -75,6 +75,7 @@ const AddProductModal = ({ categories, onClose, onSuccess }) => {
             <div className="input-group">
               <label className="input-label">Category *</label>
               <select name="categoryId" className="input-field" value={formData.categoryId} onChange={handleChange} required>
+                <option value="" disabled>Select a Category</option>
                 {categories.map(c => (
                   <option key={c.id} value={c.id} style={{ background: '#0b0f19' }}>{c.name}</option>
                 ))}

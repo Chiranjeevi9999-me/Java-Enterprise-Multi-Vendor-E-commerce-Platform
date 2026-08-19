@@ -6,6 +6,8 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -16,14 +18,25 @@ public class DataInitializer implements CommandLineRunner {
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
     private final ReviewRepository reviewRepository;
+    private final OrderRepository orderRepository;
+    private final PaymentRepository paymentRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public DataInitializer(UserRepository userRepository, VendorProfileRepository vendorProfileRepository, CategoryRepository categoryRepository, ProductRepository productRepository, ReviewRepository reviewRepository, PasswordEncoder passwordEncoder) {
+    public DataInitializer(UserRepository userRepository,
+                           VendorProfileRepository vendorProfileRepository,
+                           CategoryRepository categoryRepository,
+                           ProductRepository productRepository,
+                           ReviewRepository reviewRepository,
+                           OrderRepository orderRepository,
+                           PaymentRepository paymentRepository,
+                           PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.vendorProfileRepository = vendorProfileRepository;
         this.categoryRepository = categoryRepository;
         this.productRepository = productRepository;
         this.reviewRepository = reviewRepository;
+        this.orderRepository = orderRepository;
+        this.paymentRepository = paymentRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -64,13 +77,22 @@ public class DataInitializer implements CommandLineRunner {
         User customer1 = User.builder()
                 .email("customer@shopstack.com")
                 .password(passwordEncoder.encode("customer123"))
-                .fullName("Sarah Jenkins")
+                .fullName("Chiru")
                 .phoneNumber("+1 555-0103")
                 .role(Role.CUSTOMER)
                 .enabled(true)
                 .build();
 
-        userRepository.saveAll(List.of(admin, vendorUser1, vendorUser2, customer1));
+        User customer2 = User.builder()
+                .email("alex.miller@gmail.com")
+                .password(passwordEncoder.encode("customer123"))
+                .fullName("Alex Miller")
+                .phoneNumber("+1 555-0104")
+                .role(Role.CUSTOMER)
+                .enabled(true)
+                .build();
+
+        userRepository.saveAll(List.of(admin, vendorUser1, vendorUser2, customer1, customer2));
 
         // 2. Create Vendor Profiles
         VendorProfile vendor1 = VendorProfile.builder()
@@ -231,6 +253,201 @@ public class DataInitializer implements CommandLineRunner {
 
         reviewRepository.saveAll(List.of(r1, r2));
 
-        System.out.println(">>> [ShopStack DataInitializer] Successfully initialized demo marketplace dataset.");
+        // 6. Create Seed Orders & Payments across past days
+        LocalDateTime now = LocalDateTime.now();
+
+        // Order 1: Delivered electronics order
+        Order order1 = Order.builder()
+                .orderNumber("ORD-2026-0814-101")
+                .customer(customer1)
+                .vendorProfile(vendor1)
+                .totalAmount(249.99)
+                .status(OrderStatus.DELIVERED)
+                .shippingAddress("742 Evergreen Terrace, Springfield, OR 97477")
+                .createdAt(now.minusDays(5))
+                .build();
+        order1.setPaymentMethod(PaymentMethod.CARD);
+        order1.setPaymentStatus(PaymentStatus.PAID);
+
+        OrderItem item1 = OrderItem.builder()
+                .order(order1)
+                .product(p1)
+                .quantity(1)
+                .unitPrice(249.99)
+                .subtotal(249.99)
+                .build();
+        order1.setItems(new ArrayList<>(List.of(item1)));
+
+        // Order 2: Shipped Laptop order
+        Order order2 = Order.builder()
+                .orderNumber("ORD-2026-0816-102")
+                .customer(customer2)
+                .vendorProfile(vendor1)
+                .totalAmount(1399.00)
+                .status(OrderStatus.SHIPPED)
+                .shippingAddress("100 Market Street, Suite 400, San Francisco, CA 94105")
+                .createdAt(now.minusDays(3))
+                .build();
+        order2.setPaymentMethod(PaymentMethod.UPI);
+        order2.setPaymentStatus(PaymentStatus.PAID);
+
+        OrderItem item2 = OrderItem.builder()
+                .order(order2)
+                .product(p2)
+                .quantity(1)
+                .unitPrice(1399.00)
+                .subtotal(1399.00)
+                .build();
+        order2.setItems(new ArrayList<>(List.of(item2)));
+
+        // Order 3: Delivered Fashion order
+        Order order3 = Order.builder()
+                .orderNumber("ORD-2026-0817-103")
+                .customer(customer1)
+                .vendorProfile(vendor2)
+                .totalAmount(364.99)
+                .status(OrderStatus.DELIVERED)
+                .shippingAddress("742 Evergreen Terrace, Springfield, OR 97477")
+                .createdAt(now.minusDays(2))
+                .build();
+        order3.setPaymentMethod(PaymentMethod.NETBANKING);
+        order3.setPaymentStatus(PaymentStatus.PAID);
+
+        OrderItem item3a = OrderItem.builder()
+                .order(order3)
+                .product(p3)
+                .quantity(1)
+                .unitPrice(69.99)
+                .subtotal(69.99)
+                .build();
+        OrderItem item3b = OrderItem.builder()
+                .order(order3)
+                .product(p4)
+                .quantity(1)
+                .unitPrice(295.00)
+                .subtotal(295.00)
+                .build();
+        order3.setItems(new ArrayList<>(List.of(item3a, item3b)));
+
+        // Order 4: Processing Home order
+        Order order4 = Order.builder()
+                .orderNumber("ORD-2026-0818-104")
+                .customer(customer2)
+                .vendorProfile(vendor1)
+                .totalAmount(119.98)
+                .status(OrderStatus.PROCESSING)
+                .shippingAddress("100 Market Street, Suite 400, San Francisco, CA 94105")
+                .createdAt(now.minusDays(1))
+                .build();
+        order4.setPaymentMethod(PaymentMethod.CARD);
+        order4.setPaymentStatus(PaymentStatus.PAID);
+
+        OrderItem item4 = OrderItem.builder()
+                .order(order4)
+                .product(p5)
+                .quantity(2)
+                .unitPrice(59.99)
+                .subtotal(119.98)
+                .build();
+        order4.setItems(new ArrayList<>(List.of(item4)));
+
+        // Order 5: Confirmed Fashion order
+        Order order5 = Order.builder()
+                .orderNumber("ORD-2026-0819-105")
+                .customer(customer1)
+                .vendorProfile(vendor2)
+                .totalAmount(139.98)
+                .status(OrderStatus.CONFIRMED)
+                .shippingAddress("742 Evergreen Terrace, Springfield, OR 97477")
+                .createdAt(now.minusHours(4))
+                .build();
+        order5.setPaymentMethod(PaymentMethod.UPI);
+        order5.setPaymentStatus(PaymentStatus.PAID);
+
+        OrderItem item5 = OrderItem.builder()
+                .order(order5)
+                .product(p3)
+                .quantity(2)
+                .unitPrice(69.99)
+                .subtotal(139.98)
+                .build();
+        order5.setItems(new ArrayList<>(List.of(item5)));
+
+        orderRepository.saveAll(List.of(order1, order2, order3, order4, order5));
+
+        // 7. Create Corresponding Payment Records
+        Payment pay1 = Payment.builder()
+                .razorpayOrderId("order_rzp_mock_101")
+                .razorpayPaymentId("pay_rzp_mock_101")
+                .razorpaySignature("sig_mock_101")
+                .amount(249.99)
+                .currency("INR")
+                .status(PaymentStatus.PAID)
+                .paymentMethod(PaymentMethod.CARD)
+                .customer(customer1)
+                .orderIdsJson(String.valueOf(order1.getId()))
+                .createdAt(now.minusDays(5))
+                .updatedAt(now.minusDays(5))
+                .build();
+
+        Payment pay2 = Payment.builder()
+                .razorpayOrderId("order_rzp_mock_102")
+                .razorpayPaymentId("pay_rzp_mock_102")
+                .razorpaySignature("sig_mock_102")
+                .amount(1399.00)
+                .currency("INR")
+                .status(PaymentStatus.PAID)
+                .paymentMethod(PaymentMethod.UPI)
+                .customer(customer2)
+                .orderIdsJson(String.valueOf(order2.getId()))
+                .createdAt(now.minusDays(3))
+                .updatedAt(now.minusDays(3))
+                .build();
+
+        Payment pay3 = Payment.builder()
+                .razorpayOrderId("order_rzp_mock_103")
+                .razorpayPaymentId("pay_rzp_mock_103")
+                .razorpaySignature("sig_mock_103")
+                .amount(364.99)
+                .currency("INR")
+                .status(PaymentStatus.PAID)
+                .paymentMethod(PaymentMethod.NETBANKING)
+                .customer(customer1)
+                .orderIdsJson(String.valueOf(order3.getId()))
+                .createdAt(now.minusDays(2))
+                .updatedAt(now.minusDays(2))
+                .build();
+
+        Payment pay4 = Payment.builder()
+                .razorpayOrderId("order_rzp_mock_104")
+                .razorpayPaymentId("pay_rzp_mock_104")
+                .razorpaySignature("sig_mock_104")
+                .amount(119.98)
+                .currency("INR")
+                .status(PaymentStatus.PAID)
+                .paymentMethod(PaymentMethod.CARD)
+                .customer(customer2)
+                .orderIdsJson(String.valueOf(order4.getId()))
+                .createdAt(now.minusDays(1))
+                .updatedAt(now.minusDays(1))
+                .build();
+
+        Payment pay5 = Payment.builder()
+                .razorpayOrderId("order_rzp_mock_105")
+                .razorpayPaymentId("pay_rzp_mock_105")
+                .razorpaySignature("sig_mock_105")
+                .amount(139.98)
+                .currency("INR")
+                .status(PaymentStatus.PAID)
+                .paymentMethod(PaymentMethod.UPI)
+                .customer(customer1)
+                .orderIdsJson(String.valueOf(order5.getId()))
+                .createdAt(now.minusHours(4))
+                .updatedAt(now.minusHours(4))
+                .build();
+
+        paymentRepository.saveAll(List.of(pay1, pay2, pay3, pay4, pay5));
+
+        System.out.println(">>> [ShopStack DataInitializer] Successfully initialized demo marketplace dataset with live orders & payments.");
     }
 }
