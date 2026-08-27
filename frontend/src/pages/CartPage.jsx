@@ -178,10 +178,28 @@ const CartPage = () => {
           </div>
 
           {totalDiscount > 0 && (
-            <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '0.75rem', borderRadius: '8px', color: '#10b981', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
+            <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '0.75rem', borderRadius: '8px', color: '#10b981', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
               🎉 You save ₹{formatPrice(totalDiscount)} on this order!
             </div>
           )}
+
+          {/* Promo Coupon Preview Banner */}
+          <div style={{ 
+            background: 'rgba(99, 102, 241, 0.1)', 
+            border: '1px dashed #818cf8', 
+            borderRadius: '8px', 
+            padding: '0.75rem', 
+            marginBottom: '1.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.6rem'
+          }}>
+            <span style={{ fontSize: '1.2rem' }}>🏷️</span>
+            <div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#c7d2fe' }}>Have a Coupon Code?</div>
+              <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>Apply SAVE20 or WELCOME50 at checkout for extra discounts!</div>
+            </div>
+          </div>
 
           <button 
             onClick={handleCheckoutClick}

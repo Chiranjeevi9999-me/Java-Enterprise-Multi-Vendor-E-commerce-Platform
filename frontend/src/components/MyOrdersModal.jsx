@@ -84,7 +84,7 @@ const MyOrdersModal = ({ onClose }) => {
                           <span style={{ color: 'var(--text-subtle)', marginLeft: '0.5rem', fontSize: '0.8rem' }}>x{item.quantity}</span>
                         </div>
                       </div>
-                      <span style={{ fontWeight: 700, color: '#fff' }}>${item.subtotal?.toFixed(2)}</span>
+                      <span style={{ fontWeight: 700, color: '#fff' }}>₹{item.subtotal?.toFixed(2)}</span>
                     </div>
                   ))}
                 </div>
@@ -96,7 +96,7 @@ const MyOrdersModal = ({ onClose }) => {
                   </div>
 
                   <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff' }}>
-                    Total: <span style={{ color: 'var(--primary)' }}>${ord.totalAmount?.toFixed(2)}</span>
+                    Total: <span style={{ color: 'var(--primary)' }}>₹{ord.totalAmount?.toFixed(2)}</span>
                   </div>
                 </div>
 

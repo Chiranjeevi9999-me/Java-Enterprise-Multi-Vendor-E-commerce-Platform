@@ -13,6 +13,10 @@ public class CreateOrderRequest {
 
     private com.shopstack.model.PaymentMethod paymentMethod = com.shopstack.model.PaymentMethod.CARD;
 
+    private String couponCode;
+
+    private Double discountAmount = 0.0;
+
     public CreateOrderRequest() {}
 
     public CreateOrderRequest(List<OrderItemRequest> items, String shippingAddress) {
@@ -28,6 +32,12 @@ public class CreateOrderRequest {
 
     public com.shopstack.model.PaymentMethod getPaymentMethod() { return paymentMethod; }
     public void setPaymentMethod(com.shopstack.model.PaymentMethod paymentMethod) { this.paymentMethod = paymentMethod; }
+
+    public String getCouponCode() { return couponCode; }
+    public void setCouponCode(String couponCode) { this.couponCode = couponCode; }
+
+    public Double getDiscountAmount() { return discountAmount; }
+    public void setDiscountAmount(Double discountAmount) { this.discountAmount = discountAmount; }
 
     public static class OrderItemRequest {
         @NotNull(message = "Product ID is required")

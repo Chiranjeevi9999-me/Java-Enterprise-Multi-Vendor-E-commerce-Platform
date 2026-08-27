@@ -87,11 +87,11 @@ const ProductDetailModal = ({ product, onClose }) => {
             <div style={{ marginBottom: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.8rem' }}>
                 <span style={{ fontSize: '2rem', fontWeight: 800, color: '#fff' }}>
-                  ${(product.discountPrice || product.price).toFixed(2)}
+                  ₹{(product.discountPrice || product.price).toFixed(2)}
                 </span>
                 {product.discountPrice && (
                   <span style={{ fontSize: '1.1rem', color: 'var(--text-subtle)', textDecoration: 'line-through' }}>
-                    ${product.price.toFixed(2)}
+                    ₹{product.price.toFixed(2)}
                   </span>
                 )}
               </div>
@@ -163,7 +163,7 @@ const ProductDetailModal = ({ product, onClose }) => {
               style={{ marginTop: 'auto', width: '100%', padding: '0.88rem', fontSize: '0.98rem', opacity: isOutOfStock ? 0.7 : 1, cursor: isOutOfStock ? 'not-allowed' : 'pointer' }}
             >
               <ShoppingCart size={18} />
-              {isOutOfStock ? 'Currently Out of Stock' : `Add ${quantity} to Cart ($${((product.discountPrice || product.price) * quantity).toFixed(2)})`}
+              {isOutOfStock ? 'Currently Out of Stock' : `Add ${quantity} to Cart (₹${((product.discountPrice || product.price) * quantity).toFixed(2)})`}
             </button>
 
           </div>

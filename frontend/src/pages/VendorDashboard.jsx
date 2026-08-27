@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { vendorApi, productApi, categoryApi, orderApi } from '../api';
+import { vendorApi, productApi, categoryApi, orderApi, commissionApi, warehouseApi } from '../api';
 import AddProductModal from '../components/AddProductModal';
 import UpdateStockModal from '../components/UpdateStockModal';
-import { Store, Plus, Package, DollarSign, TrendingUp, AlertTriangle, Trash2, CheckCircle, RefreshCw, ShoppingBag, Edit3, MapPin } from 'lucide-react';
+import { Store, Plus, Package, DollarSign, TrendingUp, AlertTriangle, Trash2, CheckCircle, RefreshCw, ShoppingBag, Edit3, MapPin, Percent, CreditCard, PieChart, Layers } from 'lucide-react';
 
 const VendorDashboard = () => {
   const { user } = useAuth();
@@ -11,7 +11,9 @@ const VendorDashboard = () => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [activeTab, setActiveTab] = useState('CATALOG'); // 'CATALOG' | 'ORDERS'
+  const [commissions, setCommissions] = useState([]);
+  const [allocations, setAllocations] = useState([]);
+  const [activeTab, setActiveTab] = useState('CATALOG'); // 'CATALOG' | 'ORDERS' | 'EARNINGS'
   
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -28,12 +30,16 @@ const VendorDashboard = () => {
       setCategories(catsRes.data);
 
       if (profRes.data?.id) {
-        const [prodsRes, ordsRes] = await Promise.all([
+        const [prodsRes, ordsRes, commsRes, allocsRes] = await Promise.all([
           productApi.getByVendor(profRes.data.id),
           orderApi.getByVendor(profRes.data.id).catch(() => ({ data: [] })),
+          commissionApi.getByVendor(profRes.data.id).catch(() => ({ data: [] })),
+          warehouseApi.getAllocations().catch(() => ({ data: [] })),
         ]);
         setProducts(prodsRes.data || []);
         setOrders(ordsRes.data || []);
+        setCommissions(commsRes.data || []);
+        setAllocations(allocsRes.data || []);
       }
     } catch (err) {
       console.error(err);
@@ -121,6 +127,14 @@ const VendorDashboard = () => {
           style={{ fontSize: '0.88rem', borderRadius: '6px' }}
         >
           <ShoppingBag size={16} /> Merchant Orders ({orders.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('EARNINGS')}
+          className={`btn ${activeTab === 'EARNINGS' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ fontSize: '0.88rem', borderRadius: '6px' }}
+        >
+          <CreditCard size={16} /> Earnings & Commissions ({commissions.length})
         </button>
       </div>
 
@@ -312,18 +326,26 @@ const VendorDashboard = () => {
 
                   {/* Line Items */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
-                    {ord.items?.map((item) => (
-                      <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.88rem', background: '#ffffff', padding: '0.6rem 0.85rem', borderRadius: '4px', border: '1px solid #f1f5f9' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                          <img src={item.product?.imageUrl} alt="" style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover' }} />
-                          <div>
-                            <span style={{ fontWeight: 700, color: '#0f172a' }}>{item.product?.title}</span>
-                            <span style={{ color: '#64748b', marginLeft: '0.6rem', fontSize: '0.8rem' }}>Qty: {item.quantity}</span>
+                    {ord.items?.map((item) => {
+                      const itemAlloc = allocations.find(a => a.orderItemId === item.id || (a.orderId === ord.id && a.productId === item.product?.id));
+                      return (
+                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.88rem', background: '#ffffff', padding: '0.6rem 0.85rem', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            <img src={item.product?.imageUrl} alt="" style={{ width: '36px', height: '36px', borderRadius: '6px', objectFit: 'cover' }} />
+                            <div>
+                              <span style={{ fontWeight: 700, color: '#0f172a' }}>{item.product?.title}</span>
+                              <span style={{ color: '#64748b', marginLeft: '0.6rem', fontSize: '0.8rem' }}>Qty: {item.quantity}</span>
+                              {itemAlloc && (
+                                <div style={{ fontSize: '0.75rem', color: '#2563eb', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.15rem' }}>
+                                  <Layers size={11} /> Hub: {itemAlloc.warehouseName} ({itemAlloc.warehouseCode}) • Stage: <strong style={{ color: '#059669' }}>{itemAlloc.stage}</strong>
+                                </div>
+                              )}
+                            </div>
                           </div>
+                          <span style={{ fontWeight: 700, color: '#0f172a' }}>₹{item.subtotal?.toFixed(2)}</span>
                         </div>
-                        <span style={{ fontWeight: 700, color: '#0f172a' }}>₹{item.subtotal?.toFixed(2)}</span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', paddingTop: '0.75rem', fontSize: '0.85rem' }}>
@@ -340,6 +362,123 @@ const VendorDashboard = () => {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Tab 3: Earnings & Commission Breakdown */}
+      {activeTab === 'EARNINGS' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          
+          {/* Earnings KPI Cards */}
+          {(() => {
+            const validComms = commissions.filter(c => c.status !== 'CANCELLED');
+            const grossSales = validComms.reduce((acc, c) => acc + (c.orderAmount || 0), 0);
+            const totalFees = validComms.reduce((acc, c) => acc + (c.commissionAmount || 0), 0);
+            const netPayout = validComms.reduce((acc, c) => acc + (c.vendorAmount || 0), 0);
+            const rate = profile?.commissionRate != null ? profile.commissionRate : 10.0;
+
+            return (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
+                  
+                  <div className="card" style={{ padding: '1.25rem', background: '#ffffff' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Gross Store Sales</span>
+                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a', marginTop: '0.2rem' }}>
+                      ₹{grossSales.toFixed(2)}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.1rem' }}>Total Customer Volume</div>
+                  </div>
+
+                  <div className="card" style={{ padding: '1.25rem', background: '#ffffff' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Platform Fee Deducted</span>
+                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#6366f1', marginTop: '0.2rem' }}>
+                      ₹{totalFees.toFixed(2)}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#6366f1', marginTop: '0.1rem' }}>Marketplace Cut ({rate}%)</div>
+                  </div>
+
+                  <div className="card" style={{ padding: '1.25rem', background: '#ffffff' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Net Merchant Balance</span>
+                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#16a34a', marginTop: '0.2rem' }}>
+                      ₹{netPayout.toFixed(2)}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#16a34a', marginTop: '0.1rem' }}>Payable to Your Account</div>
+                  </div>
+
+                  <div className="card" style={{ padding: '1.25rem', background: '#ffffff' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Commission Rate</span>
+                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#d97706', marginTop: '0.2rem' }}>
+                      {rate}%
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.1rem' }}>Contracted Platform Fee</div>
+                  </div>
+
+                </div>
+
+                {/* Itemized Order Commission Breakdown Table */}
+                <div className="card" style={{ padding: '1.5rem', background: '#ffffff' }}>
+                  <div style={{ marginBottom: '1.25rem' }}>
+                    <h2 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#0f172a' }}>Order-by-Order Commission Ledger</h2>
+                    <p style={{ color: '#64748b', fontSize: '0.82rem', marginTop: '0.2rem' }}>
+                      Detailed statement of customer order sales, platform fees deducted, and net amounts credited to you.
+                    </p>
+                  </div>
+
+                  {commissions.length === 0 ? (
+                    <div style={{ padding: '3.5rem 1rem', textAlign: 'center', color: '#64748b' }}>
+                      No commission settlement transactions recorded yet.
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                            <th style={{ padding: '0.75rem 1rem' }}>Order Number</th>
+                            <th style={{ padding: '0.75rem 1rem' }}>Order Date</th>
+                            <th style={{ padding: '0.75rem 1rem' }}>Order Sale</th>
+                            <th style={{ padding: '0.75rem 1rem' }}>Commission %</th>
+                            <th style={{ padding: '0.75rem 1rem' }}>Platform Fee</th>
+                            <th style={{ padding: '0.75rem 1rem' }}>Your Net Payout</th>
+                            <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>Settlement Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {commissions.map(c => (
+                            <tr key={c.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '0.85rem 1rem', fontWeight: 700, color: '#0f172a' }}>
+                                {c.orderNumber || `ORD-${c.orderId}`}
+                              </td>
+                              <td style={{ padding: '0.85rem 1rem', color: '#64748b', fontSize: '0.82rem' }}>
+                                {c.createdAt ? new Date(c.createdAt).toLocaleDateString() : 'N/A'}
+                              </td>
+                              <td style={{ padding: '0.85rem 1rem', fontWeight: 700, color: '#0f172a' }}>
+                                ₹{c.orderAmount?.toFixed(2)}
+                              </td>
+                              <td style={{ padding: '0.85rem 1rem', color: '#6366f1', fontWeight: 700 }}>
+                                {c.commissionRate}%
+                              </td>
+                              <td style={{ padding: '0.85rem 1rem', color: '#dc2626', fontWeight: 700 }}>
+                                - ₹{c.commissionAmount?.toFixed(2)}
+                              </td>
+                              <td style={{ padding: '0.85rem 1rem', color: '#16a34a', fontWeight: 800 }}>
+                                ₹{c.vendorAmount?.toFixed(2)}
+                              </td>
+                              <td style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>
+                                <span className={`badge ${c.status === 'PAID' || c.status === 'SETTLED' ? 'badge-customer' : c.status === 'CALCULATED' ? 'badge-admin' : c.status === 'CANCELLED' ? 'badge-danger' : 'badge-warning'}`} style={{ fontSize: '0.72rem' }}>
+                                  {c.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+
         </div>
       )}
 

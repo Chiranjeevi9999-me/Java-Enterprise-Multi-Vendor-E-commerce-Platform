@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { adminApi, categoryApi, vendorApi } from '../api';
+import { adminApi, categoryApi, vendorApi, commissionApi, couponApi } from '../api';
 import {
   ShieldCheck, Store, Users, Package, Check, X, PlusCircle, DollarSign,
   ShoppingBag, Lock, Unlock, TrendingUp, BarChart3, Activity,
   FileText, Download, Printer, Search, Filter, Clock, AlertTriangle,
   CheckCircle, Eye, RefreshCw, Sliders, CreditCard, Cpu, Database,
-  Server, Star, ArrowUpRight, ChevronRight, Layers, HelpCircle
+  Server, Star, ArrowUpRight, ChevronRight, Layers, HelpCircle,
+  Calculator, Percent, PlayCircle, Zap, Tag, Sparkles, Gift, Edit2, Trash2
 } from 'lucide-react';
+import WarehouseManagementTab from '../components/warehouse/WarehouseManagementTab';
 
 const AdminDashboard = () => {
   // Navigation Tabs
   const [activeTab, setActiveTab] = useState('OVERVIEW');
-  // 'OVERVIEW' | 'VENDORS' | 'ANALYTICS' | 'ORDERS' | 'COMMISSIONS' | 'SYSTEM' | 'REPORTS' | 'USERS' | 'TAXONOMY'
+  // 'OVERVIEW' | 'VENDORS' | 'ANALYTICS' | 'ORDERS' | 'COMMISSIONS' | 'COUPONS' | 'SYSTEM' | 'REPORTS' | 'USERS' | 'TAXONOMY'
 
   // Global State
   const [loading, setLoading] = useState(true);
@@ -39,10 +41,43 @@ const AdminDashboard = () => {
 
   // Commission State
   const [commissionSummary, setCommissionSummary] = useState(null);
+  const [commissionRecords, setCommissionRecords] = useState([]);
+  const [commissionFilterVendor, setCommissionFilterVendor] = useState('ALL');
+  const [commissionFilterStatus, setCommissionFilterStatus] = useState('ALL');
+  const [simOrderAmount, setSimOrderAmount] = useState('10000');
+  const [simCommissionRate, setSimCommissionRate] = useState('10');
+  const [simVendorId, setSimVendorId] = useState('');
+  const [simResult, setSimResult] = useState({
+    orderAmount: 10000.0,
+    commissionRate: 10.0,
+    commissionAmount: 1000.0,
+    vendorAmount: 9000.0,
+    formulaExplanation: 'Order Amount (₹10000.00) × Rate (10.00%) = Platform Cut: ₹1000.00 | Vendor Net: ₹9000.00'
+  });
+  const [simLoading, setSimLoading] = useState(false);
 
-  // System Health State
-  const [systemHealth, setSystemHealth] = useState(null);
-  const [healthPingMs, setHealthPingMs] = useState(12);
+  // Coupon Engine State
+  const [coupons, setCoupons] = useState([]);
+  const [couponAnalytics, setCouponAnalytics] = useState(null);
+  const [couponUsages, setCouponUsages] = useState([]);
+  const [couponSearch, setCouponSearch] = useState('');
+  const [couponFilterStatus, setCouponFilterStatus] = useState('ALL');
+  const [showCouponModal, setShowCouponModal] = useState(false);
+  const [editingCoupon, setEditingCoupon] = useState(null);
+  const [couponFormData, setCouponFormData] = useState({
+    code: '',
+    description: '',
+    discountType: 'PERCENTAGE',
+    discountValue: 20,
+    minOrderAmount: 1000,
+    maxDiscountAmount: 1000,
+    startDate: '',
+    expiryDate: '',
+    usageLimit: 500,
+    userUsageLimit: 1,
+    active: true
+  });
+  const [couponSubmitting, setCouponSubmitting] = useState(false);
 
   // Business Reports State
   const [reportType, setReportType] = useState('SALES');
@@ -132,13 +167,20 @@ const AdminDashboard = () => {
     }
   }, [activeTab, orderStatusFilter]);
 
-  // Load Commission Summary
+  // Load Commission Summary & Audit Records
   const loadCommissions = async () => {
     try {
-      const res = await adminApi.getCommissionSummary();
-      setCommissionSummary(res.data);
+      const [sumRes, recsRes] = await Promise.all([
+        commissionApi.getSummary().catch(() => adminApi.getCommissionSummary()),
+        commissionApi.getAll({
+          vendorId: commissionFilterVendor !== 'ALL' ? commissionFilterVendor : undefined,
+          status: commissionFilterStatus !== 'ALL' ? commissionFilterStatus : undefined,
+        }).catch(() => ({ data: [] })),
+      ]);
+      if (sumRes?.data) setCommissionSummary(sumRes.data);
+      if (recsRes?.data) setCommissionRecords(recsRes.data);
     } catch (err) {
-      console.error('Failed to load commission summary:', err);
+      console.error('Failed to load commission summary & records:', err);
     }
   };
 
@@ -146,26 +188,185 @@ const AdminDashboard = () => {
     if (activeTab === 'COMMISSIONS') {
       loadCommissions();
     }
-  }, [activeTab]);
+  }, [activeTab, commissionFilterVendor, commissionFilterStatus]);
 
-  // Load System Health
-  const loadSystemHealth = async () => {
-    const start = performance.now();
+  // Run Commission Simulation API
+  const handleRunSimulation = async (amount = simOrderAmount, rate = simCommissionRate, vId = simVendorId) => {
+    setSimLoading(true);
     try {
-      const res = await adminApi.getSystemHealth();
-      const end = performance.now();
-      setHealthPingMs(Math.round(end - start));
-      setSystemHealth(res.data);
+      const payload = {
+        orderAmount: parseFloat(amount) || 0.0,
+        commissionRate: rate !== '' ? parseFloat(rate) : undefined,
+        vendorId: vId ? parseInt(vId) : undefined,
+      };
+      const res = await commissionApi.calculate(payload);
+      setSimResult(res.data);
     } catch (err) {
-      console.error('Failed to load system health:', err);
+      console.error('Commission simulation error:', err);
+      showToast('Error executing commission simulation calculation.', 'error');
+    } finally {
+      setSimLoading(false);
+    }
+  };
+
+  // Quick Preset Simulator Handler
+  const handleApplySimulatorPreset = (amount, rate) => {
+    setSimOrderAmount(amount.toString());
+    setSimCommissionRate(rate.toString());
+    setSimVendorId('');
+    handleRunSimulation(amount, rate, '');
+  };
+
+  // Update Individual Commission Record Status
+  const handleUpdateCommissionStatus = async (commissionId, newStatus) => {
+    try {
+      await commissionApi.updateStatus(commissionId, newStatus);
+      showToast(`Commission record marked as ${newStatus}.`);
+      loadCommissions();
+    } catch (err) {
+      showToast('Failed to update commission status.', 'error');
+    }
+  };
+
+  // Load Coupon Engine Data
+  const loadCoupons = async () => {
+    try {
+      const [listRes, statsRes, usagesRes] = await Promise.all([
+        couponApi.getAll().catch(() => ({ data: [] })),
+        couponApi.getAnalytics().catch(() => ({ data: null })),
+        couponApi.getUsageHistory().catch(() => ({ data: [] }))
+      ]);
+      setCoupons(listRes.data || []);
+      if (statsRes?.data) setCouponAnalytics(statsRes.data);
+      setCouponUsages(usagesRes.data || []);
+    } catch (err) {
+      console.error('Failed to load coupons:', err);
     }
   };
 
   useEffect(() => {
-    if (activeTab === 'SYSTEM') {
-      loadSystemHealth();
+    if (activeTab === 'COUPONS' || activeTab === 'OVERVIEW') {
+      loadCoupons();
     }
   }, [activeTab]);
+
+  const handleOpenCouponModal = (coupon = null) => {
+    if (coupon) {
+      setEditingCoupon(coupon);
+      setCouponFormData({
+        code: coupon.code,
+        description: coupon.description || '',
+        discountType: coupon.discountType || 'PERCENTAGE',
+        discountValue: coupon.discountValue || 10,
+        minOrderAmount: coupon.minOrderAmount || '',
+        maxDiscountAmount: coupon.maxDiscountAmount || '',
+        startDate: coupon.startDate ? coupon.startDate.slice(0, 10) : '',
+        expiryDate: coupon.expiryDate ? coupon.expiryDate.slice(0, 10) : '',
+        usageLimit: coupon.usageLimit || '',
+        userUsageLimit: coupon.userUsageLimit || 1,
+        active: coupon.active !== false
+      });
+    } else {
+      setEditingCoupon(null);
+      setCouponFormData({
+        code: '',
+        description: '',
+        discountType: 'PERCENTAGE',
+        discountValue: 20,
+        minOrderAmount: 1000,
+        maxDiscountAmount: 1000,
+        startDate: '',
+        expiryDate: '',
+        usageLimit: 500,
+        userUsageLimit: 1,
+        active: true
+      });
+    }
+    setShowCouponModal(true);
+  };
+
+  const handleSaveCoupon = async (e) => {
+    e.preventDefault();
+    if (!couponFormData.code.trim()) {
+      showToast('Please enter a coupon code.', 'error');
+      return;
+    }
+
+    setCouponSubmitting(true);
+    try {
+      const payload = {
+        code: couponFormData.code.trim().toUpperCase(),
+        description: couponFormData.description,
+        discountType: couponFormData.discountType,
+        discountValue: parseFloat(couponFormData.discountValue),
+        minOrderAmount: couponFormData.minOrderAmount ? parseFloat(couponFormData.minOrderAmount) : null,
+        maxDiscountAmount: couponFormData.maxDiscountAmount ? parseFloat(couponFormData.maxDiscountAmount) : null,
+        startDate: couponFormData.startDate ? couponFormData.startDate + 'T00:00:00' : null,
+        expiryDate: couponFormData.expiryDate ? couponFormData.expiryDate + 'T23:59:59' : null,
+        usageLimit: couponFormData.usageLimit ? parseInt(couponFormData.usageLimit) : null,
+        userUsageLimit: couponFormData.userUsageLimit ? parseInt(couponFormData.userUsageLimit) : 1,
+        active: couponFormData.active
+      };
+
+      if (editingCoupon) {
+        await couponApi.update(editingCoupon.id, payload);
+        showToast(`Coupon ${payload.code} updated successfully.`);
+      } else {
+        await couponApi.create(payload);
+        showToast(`Coupon ${payload.code} created successfully.`);
+      }
+      setShowCouponModal(false);
+      loadCoupons();
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to save coupon.';
+      showToast(msg, 'error');
+    } finally {
+      setCouponSubmitting(false);
+    }
+  };
+
+  const handleToggleCoupon = async (id) => {
+    try {
+      await couponApi.toggleStatus(id);
+      showToast('Coupon active status updated.');
+      loadCoupons();
+    } catch (err) {
+      showToast('Failed to toggle coupon status.', 'error');
+    }
+  };
+
+  const handleDeleteCoupon = async (id, code) => {
+    if (window.confirm(`Are you sure you want to delete coupon '${code}'?`)) {
+      try {
+        await couponApi.delete(id);
+        showToast(`Coupon '${code}' deleted.`);
+        loadCoupons();
+      } catch (err) {
+        showToast('Failed to delete coupon.', 'error');
+      }
+    }
+  };
+
+  const filteredCoupons = useMemo(() => {
+    return coupons.filter(c => {
+      const matchesSearch = !couponSearch || 
+        c.code.toLowerCase().includes(couponSearch.toLowerCase()) || 
+        (c.description && c.description.toLowerCase().includes(couponSearch.toLowerCase()));
+      
+      const now = new Date();
+      const isExpired = c.expiryDate && new Date(c.expiryDate) < now;
+      
+      let matchesStatus = true;
+      if (couponFilterStatus === 'ACTIVE') {
+        matchesStatus = c.active && !isExpired;
+      } else if (couponFilterStatus === 'INACTIVE') {
+        matchesStatus = !c.active;
+      } else if (couponFilterStatus === 'EXPIRED') {
+        matchesStatus = isExpired;
+      }
+      return matchesSearch && matchesStatus;
+    });
+  }, [coupons, couponSearch, couponFilterStatus]);
 
   // Load Business Report
   const loadReport = async (type = reportType, range = reportRange) => {
@@ -353,7 +554,7 @@ const AdminDashboard = () => {
             Admin Dashboard & Business Intelligence
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '0.2rem' }}>
-            Central management for marketplace merchants, sales analytics, multi-vendor orders, commissions, system health, and audit reports.
+            Central management for marketplace merchants, sales analytics, multi-vendor orders, commissions, and audit reports.
           </p>
         </div>
 
@@ -412,6 +613,14 @@ const AdminDashboard = () => {
         </button>
 
         <button
+          onClick={() => setActiveTab('WAREHOUSES')}
+          className={`btn ${activeTab === 'WAREHOUSES' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+          style={{ whiteSpace: 'nowrap', border: activeTab === 'WAREHOUSES' ? '1px solid #8b5cf6' : undefined, background: activeTab === 'WAREHOUSES' ? 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)' : undefined, color: activeTab === 'WAREHOUSES' ? '#fff' : undefined }}
+        >
+          <Layers size={15} /> Warehouse & Fulfillment (Task 4)
+        </button>
+
+        <button
           onClick={() => setActiveTab('COMMISSIONS')}
           className={`btn ${activeTab === 'COMMISSIONS' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
           style={{ whiteSpace: 'nowrap' }}
@@ -420,11 +629,11 @@ const AdminDashboard = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab('SYSTEM')}
-          className={`btn ${activeTab === 'SYSTEM' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+          onClick={() => setActiveTab('COUPONS')}
+          className={`btn ${activeTab === 'COUPONS' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
           style={{ whiteSpace: 'nowrap' }}
         >
-          <Activity size={15} /> System Monitoring
+          <Tag size={15} /> Coupon & Promo Engine ({coupons.length})
         </button>
 
         <button
@@ -527,145 +736,126 @@ const AdminDashboard = () => {
 
           </div>
 
-          {/* Quick Hub Navigation & System Status Banner */}
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
-            
-            {/* Quick Actions Panel */}
-            <div className="card" style={{ padding: '1.75rem' }}>
-              <h2 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fff', marginBottom: '0.35rem' }}>
-                Governance & Rapid Control Hub
-              </h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
-                Direct shortcuts to configure commission policies, audit live transactions, or export financial statements.
-              </p>
+          {/* Quick Hub Navigation */}
+          <div className="card" style={{ padding: '1.75rem', marginBottom: '2rem' }}>
+            <h2 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#fff', marginBottom: '0.35rem' }}>
+              Governance & Rapid Control Hub
+            </h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
+              Direct shortcuts to configure commission policies, audit live transactions, manage users, or export financial statements.
+            </p>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
-                
-                <div
-                  onClick={() => setActiveTab('VENDORS')}
-                  style={{
-                    padding: '1.25rem',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--border-color)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  className="hover-card"
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#c084fc', marginBottom: '0.5rem', fontWeight: 700, fontSize: '0.9rem' }}>
-                    <Store size={18} /> Vendor Approvals
-                  </div>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Review merchant applications and adjust custom commission rates.</p>
-                </div>
-
-                <div
-                  onClick={() => setActiveTab('ORDERS')}
-                  style={{
-                    padding: '1.25rem',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--border-color)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  className="hover-card"
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#fbbf24', marginBottom: '0.5rem', fontWeight: 700, fontSize: '0.9rem' }}>
-                    <ShoppingBag size={18} /> Order Monitoring
-                  </div>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Track fulfillment milestones and update order lifecycle statuses.</p>
-                </div>
-
-                <div
-                  onClick={() => setActiveTab('COMMISSIONS')}
-                  style={{
-                    padding: '1.25rem',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--border-color)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  className="hover-card"
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#34d399', marginBottom: '0.5rem', fontWeight: 700, fontSize: '0.9rem' }}>
-                    <DollarSign size={18} /> Commission Ledger
-                  </div>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Calculate platform fees and simulate net vendor payouts.</p>
-                </div>
-
-                <div
-                  onClick={() => setActiveTab('REPORTS')}
-                  style={{
-                    padding: '1.25rem',
-                    background: 'rgba(255, 255, 255, 0.03)',
-                    borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--border-color)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  className="hover-card"
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#38bdf8', marginBottom: '0.5rem', fontWeight: 700, fontSize: '0.9rem' }}>
-                    <FileText size={18} /> Business Reports
-                  </div>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Export Sales, Vendor Payouts, Inventory, and Orders to CSV/JSON.</p>
-                </div>
-
-              </div>
-            </div>
-
-            {/* Live Service Health Card */}
-            <div className="card" style={{ padding: '1.75rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#fff' }}>Platform Health</h3>
-                <span className="badge badge-customer" style={{ fontSize: '0.72rem' }}>
-                  <Activity size={12} /> ONLINE
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
-                    <span>Spring Boot API Service</span>
-                    <span style={{ color: '#34d399', fontWeight: 600 }}>Port 8081 (UP)</span>
-                  </div>
-                  <div style={{ height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ width: '100%', height: '100%', background: '#34d399' }}></div>
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
-                    <span>Database Engine</span>
-                    <span style={{ color: '#38bdf8', fontWeight: 600 }}>PostgreSQL / H2 Active</span>
-                  </div>
-                  <div style={{ height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ width: '100%', height: '100%', background: '#38bdf8' }}></div>
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
-                    <span>Payment Gateway</span>
-                    <span style={{ color: '#c084fc', fontWeight: 600 }}>Razorpay Sandbox (INR)</span>
-                  </div>
-                  <div style={{ height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ width: '100%', height: '100%', background: '#c084fc' }}></div>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setActiveTab('SYSTEM')}
-                className="btn btn-secondary btn-sm"
-                style={{ width: '100%', marginTop: '1.25rem', fontSize: '0.8rem' }}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+              
+              <div
+                onClick={() => setActiveTab('VENDORS')}
+                style={{
+                  padding: '1.25rem',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-color)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                className="hover-card"
               >
-                <Cpu size={14} /> Open Full JVM & System Diagnostics <ChevronRight size={14} />
-              </button>
-            </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#c084fc', marginBottom: '0.5rem', fontWeight: 700, fontSize: '0.9rem' }}>
+                  <Store size={18} /> Vendor Approvals
+                </div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Review merchant applications and adjust custom commission rates.</p>
+              </div>
 
+              <div
+                onClick={() => setActiveTab('ORDERS')}
+                style={{
+                  padding: '1.25rem',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-color)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                className="hover-card"
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#fbbf24', marginBottom: '0.5rem', fontWeight: 700, fontSize: '0.9rem' }}>
+                  <ShoppingBag size={18} /> Order Monitoring
+                </div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Track fulfillment milestones and update order lifecycle statuses.</p>
+              </div>
+
+              <div
+                onClick={() => setActiveTab('COMMISSIONS')}
+                style={{
+                  padding: '1.25rem',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-color)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                className="hover-card"
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#34d399', marginBottom: '0.5rem', fontWeight: 700, fontSize: '0.9rem' }}>
+                  <DollarSign size={18} /> Commission Ledger
+                </div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Calculate platform fees and simulate net vendor payouts.</p>
+              </div>
+
+              <div
+                onClick={() => setActiveTab('COUPONS')}
+                style={{
+                  padding: '1.25rem',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-color)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                className="hover-card"
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#f472b6', marginBottom: '0.5rem', fontWeight: 700, fontSize: '0.9rem' }}>
+                  <Tag size={18} /> Coupon Engine
+                </div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Create discount codes, configure limits, and track redemption.</p>
+              </div>
+
+              <div
+                onClick={() => setActiveTab('REPORTS')}
+                style={{
+                  padding: '1.25rem',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-color)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                className="hover-card"
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#38bdf8', marginBottom: '0.5rem', fontWeight: 700, fontSize: '0.9rem' }}>
+                  <FileText size={18} /> Business Reports
+                </div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Export Sales, Vendor Payouts, Inventory, and Orders to CSV/JSON.</p>
+              </div>
+
+              <div
+                onClick={() => setActiveTab('USERS')}
+                style={{
+                  padding: '1.25rem',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-color)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                className="hover-card"
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#a78bfa', marginBottom: '0.5rem', fontWeight: 700, fontSize: '0.9rem' }}>
+                  <Users size={18} /> User Governance
+                </div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Manage platform roles, customer accounts, and account access.</p>
+              </div>
+
+            </div>
           </div>
 
           {/* Recent Orders Preview on Overview */}
@@ -1373,12 +1563,13 @@ const AdminDashboard = () => {
       )}
 
       {/* =========================================================================
-          MODULE 5: COMMISSION MANAGEMENT
+          MODULE 5: COMMISSION MANAGEMENT & SETTLEMENT ENGINE
       ========================================================================= */}
       {activeTab === 'COMMISSIONS' && (
-        <div>
-          {/* Commission Summary Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+          
+          {/* 1. Global Commission Summary KPIs */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem' }}>
             
             <div className="card" style={{ padding: '1.35rem' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Gross Marketplace Sales</span>
@@ -1389,11 +1580,11 @@ const AdminDashboard = () => {
             </div>
 
             <div className="card" style={{ padding: '1.35rem' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Platform Fee Revenue</span>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Platform Cut Retained</span>
               <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#818cf8', marginTop: '0.35rem' }}>
                 ₹{commissionSummary?.totalCommissionEarned ? commissionSummary.totalCommissionEarned.toLocaleString() : '0.00'}
               </div>
-              <div style={{ fontSize: '0.78rem', color: '#818cf8', marginTop: '0.2rem' }}>Marketplace Cut Retained</div>
+              <div style={{ fontSize: '0.78rem', color: '#818cf8', marginTop: '0.2rem' }}>Platform Commission Revenue</div>
             </div>
 
             <div className="card" style={{ padding: '1.35rem' }}>
@@ -1405,7 +1596,7 @@ const AdminDashboard = () => {
             </div>
 
             <div className="card" style={{ padding: '1.35rem' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Avg Marketplace Rate</span>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>Avg Platform Rate</span>
               <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#fbbf24', marginTop: '0.35rem' }}>
                 {commissionSummary?.averageCommissionRate || 10.0}%
               </div>
@@ -1414,13 +1605,354 @@ const AdminDashboard = () => {
 
           </div>
 
-          {/* Vendor Commission Breakdown Table */}
+          {/* 2. Interactive Commission Calculator & Test Simulator */}
+          <div className="card" style={{ padding: '1.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <span className="badge badge-admin"><Calculator size={13} /> Live Calculation Engine</span>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff' }}>
+                    Interactive Vendor Commission Simulator
+                  </h3>
+                </div>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                  Test arbitrary order amounts and commission rates in real-time. Verify that platform fees and vendor net payouts calculate precisely.
+                </p>
+              </div>
+
+              {/* Quick Presets */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase' }}>
+                  <Zap size={13} style={{ display: 'inline', marginRight: '3px' }} /> 10% Presets:
+                </span>
+                <button
+                  onClick={() => handleApplySimulatorPreset(10000, 10)}
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.75rem', borderColor: '#818cf8', color: '#c7d2fe' }}
+                >
+                  ₹10,000 (Cut: ₹1,000)
+                </button>
+                <button
+                  onClick={() => handleApplySimulatorPreset(5000, 10)}
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.75rem', borderColor: '#34d399', color: '#a7f3d0' }}
+                >
+                  ₹5,000 (Cut: ₹500)
+                </button>
+                <button
+                  onClick={() => handleApplySimulatorPreset(2500, 10)}
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.75rem' }}
+                >
+                  ₹2,500 (Cut: ₹250)
+                </button>
+                <button
+                  onClick={() => handleApplySimulatorPreset(15000, 10)}
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.75rem' }}
+                >
+                  ₹15,000 (Cut: ₹1,500)
+                </button>
+                <button
+                  onClick={() => handleApplySimulatorPreset(50000, 10)}
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.75rem' }}
+                >
+                  ₹50,000 (Cut: ₹5,000)
+                </button>
+              </div>
+            </div>
+
+            {/* Simulator Inputs & Result Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', alignItems: 'center' }}>
+              
+              {/* Left: Input Form */}
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-subtle)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                      Order Amount (₹)
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-subtle)', fontWeight: 700 }}>₹</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        className="input-field"
+                        value={simOrderAmount}
+                        onChange={(e) => {
+                          setSimOrderAmount(e.target.value);
+                          handleRunSimulation(e.target.value, simCommissionRate, simVendorId);
+                        }}
+                        style={{ paddingLeft: '28px', fontSize: '0.95rem', fontWeight: 700 }}
+                        placeholder="10000"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-subtle)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                      Commission Rate (%)
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        className="input-field"
+                        value={simCommissionRate}
+                        onChange={(e) => {
+                          setSimCommissionRate(e.target.value);
+                          handleRunSimulation(simOrderAmount, e.target.value, simVendorId);
+                        }}
+                        style={{ paddingRight: '28px', fontSize: '0.95rem', fontWeight: 700 }}
+                        placeholder="10"
+                      />
+                      <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-subtle)', fontWeight: 700 }}>%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-subtle)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+                    Select Vendor Store (Optional Profile Inherit)
+                  </label>
+                  <select
+                    className="input-field"
+                    value={simVendorId}
+                    onChange={(e) => {
+                      const vId = e.target.value;
+                      setSimVendorId(vId);
+                      if (vId) {
+                        const v = vendors.find(item => item.id.toString() === vId.toString());
+                        if (v && v.commissionRate != null) {
+                          setSimCommissionRate(v.commissionRate.toString());
+                          handleRunSimulation(simOrderAmount, v.commissionRate, vId);
+                          return;
+                        }
+                      }
+                      handleRunSimulation(simOrderAmount, simCommissionRate, vId);
+                    }}
+                    style={{ fontSize: '0.88rem' }}
+                  >
+                    <option value="">-- Custom Manual Rate --</option>
+                    {vendors.map(v => (
+                      <option key={v.id} value={v.id}>
+                        {v.storeName} (Configured Fee: {v.commissionRate || 10}%)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  onClick={() => handleRunSimulation(simOrderAmount, simCommissionRate, simVendorId)}
+                  disabled={simLoading}
+                  className="btn btn-primary btn-sm"
+                  style={{ width: '100%', justifyContent: 'center' }}
+                >
+                  <PlayCircle size={15} /> {simLoading ? 'Calculating...' : 'Recalculate Split'}
+                </button>
+              </div>
+
+              {/* Right: Live Result Display */}
+              {simResult ? (
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 'var(--radius-md)', padding: '1.5rem' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-subtle)', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
+                    Calculation Breakdown
+                  </div>
+
+                  {/* Dual Metric Cards */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
+                    <div style={{ background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)', padding: '1rem', borderRadius: '8px' }}>
+                      <span style={{ fontSize: '0.75rem', color: '#a5b4fc', fontWeight: 700, textTransform: 'uppercase' }}>Platform Commission ({simResult.commissionRate}%)</span>
+                      <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#818cf8', marginTop: '0.2rem' }}>
+                        ₹{simResult.commissionAmount?.toFixed(2)}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-subtle)', marginTop: '0.1rem' }}>Platform Retained Cut</div>
+                    </div>
+
+                    <div style={{ background: 'rgba(52, 211, 153, 0.1)', border: '1px solid rgba(52, 211, 153, 0.3)', padding: '1rem', borderRadius: '8px' }}>
+                      <span style={{ fontSize: '0.75rem', color: '#6ee7b7', fontWeight: 700, textTransform: 'uppercase' }}>Vendor Payout ({((simResult.vendorAmount / (simResult.orderAmount || 1)) * 100).toFixed(1)}%)</span>
+                      <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#34d399', marginTop: '0.2rem' }}>
+                        ₹{simResult.vendorAmount?.toFixed(2)}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-subtle)', marginTop: '0.1rem' }}>Net Merchant Balance</div>
+                    </div>
+                  </div>
+
+                  {/* Percentage Split Progress Bar */}
+                  <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
+                      <span>Platform: {simResult.commissionRate}%</span>
+                      <span>Vendor: {((simResult.vendorAmount / (simResult.orderAmount || 1)) * 100).toFixed(1)}%</span>
+                    </div>
+                    <div style={{ height: '8px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden', display: 'flex' }}>
+                      <div style={{ width: `${Math.min(100, simResult.commissionRate)}%`, background: '#6366f1' }}></div>
+                      <div style={{ width: `${Math.max(0, 100 - simResult.commissionRate)}%`, background: '#10b981' }}></div>
+                    </div>
+                  </div>
+
+                  {/* Formula explanation box */}
+                  <div style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '6px', fontSize: '0.78rem', color: '#94a3b8', fontFamily: 'monospace' }}>
+                    {simResult.formulaExplanation}
+                  </div>
+                </div>
+              ) : null}
+
+            </div>
+          </div>
+
+          {/* 3. Transaction-Level Order Commission Audit Ledger */}
+          <div className="card" style={{ padding: '1.75rem' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
+              <div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff' }}>
+                  Order Commission Audit Ledger
+                </h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.2rem' }}>
+                  Granular transaction audit records showing order amount, platform retention fee, and merchant payable.
+                </p>
+              </div>
+
+              {/* Status and Vendor Filters */}
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <select
+                  className="input-field"
+                  value={commissionFilterVendor}
+                  onChange={(e) => setCommissionFilterVendor(e.target.value)}
+                  style={{ fontSize: '0.82rem', width: '180px' }}
+                >
+                  <option value="ALL">All Vendor Stores</option>
+                  {vendors.map(v => (
+                    <option key={v.id} value={v.id}>{v.storeName}</option>
+                  ))}
+                </select>
+
+                <select
+                  className="input-field"
+                  value={commissionFilterStatus}
+                  onChange={(e) => setCommissionFilterStatus(e.target.value)}
+                  style={{ fontSize: '0.82rem', width: '150px' }}
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="CALCULATED">CALCULATED</option>
+                  <option value="SETTLED">SETTLED</option>
+                  <option value="PAID">PAID</option>
+                  <option value="PENDING">PENDING</option>
+                  <option value="CANCELLED">CANCELLED</option>
+                </select>
+
+                <button onClick={loadCommissions} className="btn btn-secondary btn-sm">
+                  <RefreshCw size={14} /> Refresh
+                </button>
+              </div>
+            </div>
+
+            {/* Audit Table */}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-subtle)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                    <th style={{ padding: '0.85rem 1rem' }}>Order #</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Customer</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Vendor Store</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Order Sale</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Fee %</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Platform Cut</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Vendor Net</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Status</th>
+                    <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {commissionRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan="9" style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                        No commission audit records matching current filter criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    commissionRecords.map(rec => (
+                      <tr key={rec.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <td style={{ padding: '1rem' }}>
+                          <div style={{ fontWeight: 700, color: '#fff' }}>{rec.orderNumber || `ORD-${rec.orderId}`}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-subtle)' }}>
+                            {rec.createdAt ? new Date(rec.createdAt).toLocaleDateString() : 'N/A'}
+                          </div>
+                        </td>
+
+                        <td style={{ padding: '1rem' }}>
+                          <div style={{ color: 'var(--text-main)', fontWeight: 600 }}>{rec.customerName || 'Customer'}</div>
+                        </td>
+
+                        <td style={{ padding: '1rem' }}>
+                          <div style={{ color: '#c084fc', fontWeight: 600 }}>{rec.vendorStoreName || 'ShopStack Merchant'}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-subtle)' }}>{rec.vendorEmail}</div>
+                        </td>
+
+                        <td style={{ padding: '1rem', fontWeight: 700, color: '#fff' }}>
+                          ₹{rec.orderAmount?.toFixed(2)}
+                        </td>
+
+                        <td style={{ padding: '1rem', fontWeight: 700, color: '#818cf8' }}>
+                          {rec.commissionRate}%
+                        </td>
+
+                        <td style={{ padding: '1rem', fontWeight: 700, color: '#818cf8' }}>
+                          ₹{rec.commissionAmount?.toFixed(2)}
+                        </td>
+
+                        <td style={{ padding: '1rem', fontWeight: 800, color: '#34d399' }}>
+                          ₹{rec.vendorAmount?.toFixed(2)}
+                        </td>
+
+                        <td style={{ padding: '1rem' }}>
+                          <span className={`badge ${rec.status === 'PAID' || rec.status === 'SETTLED' ? 'badge-customer' : rec.status === 'CALCULATED' ? 'badge-admin' : rec.status === 'CANCELLED' ? 'badge-danger' : 'badge-warning'}`} style={{ fontSize: '0.75rem' }}>
+                            {rec.status}
+                          </span>
+                        </td>
+
+                        <td style={{ padding: '1rem', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                            {rec.status !== 'SETTLED' && rec.status !== 'PAID' && (
+                              <button
+                                onClick={() => handleUpdateCommissionStatus(rec.id, 'SETTLED')}
+                                className="btn btn-secondary btn-sm"
+                                style={{ fontSize: '0.72rem', padding: '0.3rem 0.6rem' }}
+                                title="Mark as Settled in vendor ledger"
+                              >
+                                Settle
+                              </button>
+                            )}
+                            {rec.status !== 'PAID' && (
+                              <button
+                                onClick={() => handleUpdateCommissionStatus(rec.id, 'PAID')}
+                                className="btn btn-primary btn-sm"
+                                style={{ fontSize: '0.72rem', padding: '0.3rem 0.6rem' }}
+                                title="Mark payout disbursed to vendor"
+                              >
+                                Mark Paid
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* 4. Merchant Store Settlement Summary Ledger */}
           <div className="card" style={{ padding: '1.75rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', marginBottom: '0.35rem' }}>
-              Merchant Commission & Settlement Ledger
+              Merchant Store Commission & Settlement Summary
             </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.5rem' }}>
-              Audit individual merchant store sales, platform retention percentage, and net payable balances.
+              Store-level overview of sales volume, platform retention rate, and net disbursals. Click Adjust Rate to configure individual merchant fees.
             </p>
 
             <div style={{ overflowX: 'auto' }}>
@@ -1429,11 +1961,13 @@ const AdminDashboard = () => {
                   <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-subtle)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
                     <th style={{ padding: '0.85rem 1rem' }}>Vendor Store</th>
                     <th style={{ padding: '0.85rem 1rem' }}>Merchant Owner</th>
-                    <th style={{ padding: '0.85rem 1rem' }}>Commission %</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Commission Rate</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Total Orders</th>
                     <th style={{ padding: '0.85rem 1rem' }}>Gross Volume</th>
                     <th style={{ padding: '0.85rem 1rem' }}>Platform Fee</th>
                     <th style={{ padding: '0.85rem 1rem' }}>Payable to Vendor</th>
-                    <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>Status</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Status</th>
+                    <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1447,13 +1981,29 @@ const AdminDashboard = () => {
                       <td style={{ padding: '1rem', fontWeight: 700, color: '#818cf8' }}>
                         {line.commissionRate}%
                       </td>
+                      <td style={{ padding: '1rem', color: 'var(--text-muted)' }}>{line.totalOrders} orders</td>
                       <td style={{ padding: '1rem', color: '#fff', fontWeight: 600 }}>₹{line.grossSales?.toFixed(2)}</td>
                       <td style={{ padding: '1rem', color: '#818cf8', fontWeight: 700 }}>₹{line.commissionAmount?.toFixed(2)}</td>
                       <td style={{ padding: '1rem', color: '#34d399', fontWeight: 800 }}>₹{line.payableToVendor?.toFixed(2)}</td>
-                      <td style={{ padding: '1rem', textAlign: 'right' }}>
+                      <td style={{ padding: '1rem' }}>
                         <span className="badge badge-customer" style={{ fontSize: '0.75rem' }}>
                           <CheckCircle size={12} /> {line.payoutStatus}
                         </span>
+                      </td>
+                      <td style={{ padding: '1rem', textAlign: 'right' }}>
+                        <button
+                          onClick={() => {
+                            const v = vendors.find(item => item.id === line.vendorId);
+                            if (v) {
+                              setSelectedVendorForModal(v);
+                              setNewCommissionRate(v.commissionRate?.toString() || '10');
+                            }
+                          }}
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                        >
+                          <Sliders size={13} /> Adjust Rate
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -1461,128 +2011,363 @@ const AdminDashboard = () => {
               </table>
             </div>
           </div>
+
         </div>
       )}
 
       {/* =========================================================================
-          MODULE 6: SYSTEM MONITORING
+          MODULE: COUPON & PROMOTION ENGINE
       ========================================================================= */}
-      {activeTab === 'SYSTEM' && (
+      {activeTab === 'COUPONS' && (
         <div>
-          {/* Header */}
+          {/* Header Card */}
           <div className="card" style={{ padding: '1.75rem', marginBottom: '1.5rem', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
             <div>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff' }}>
-                Spring Boot & Runtime System Health Monitor
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Tag size={24} color="#818cf8" />
+                Promotions & Coupon Management Engine
               </h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.2rem' }}>
-                Real-time metrics for JVM memory, thread execution pool, database pool, and external integrations.
+                Design promotional campaigns, configure percentage and flat discounts, enforce minimum order thresholds, and monitor redemptions.
               </p>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <div className="badge badge-customer" style={{ fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}>
-                <Activity size={14} /> Ping: {healthPingMs}ms
-              </div>
-              <button onClick={loadSystemHealth} className="btn btn-secondary btn-sm">
-                <RefreshCw size={14} /> Run Diagnostic Check
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button onClick={() => handleOpenCouponModal()} className="btn btn-primary btn-sm">
+                <PlusCircle size={15} /> Create New Coupon
+              </button>
+              <button onClick={loadCoupons} className="btn btn-secondary btn-sm">
+                <RefreshCw size={14} /> Refresh
               </button>
             </div>
           </div>
 
-          {systemHealth ? (
-            <div>
-              {/* JVM Gauges */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', marginBottom: '1.5rem' }}>
-                
-                {/* Heap Memory */}
-                <div className="card" style={{ padding: '1.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <Cpu size={18} color="#818cf8" /> JVM Heap Memory
-                    </h3>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#818cf8' }}>
-                      {Math.round((systemHealth.heapMemoryUsedMB / (systemHealth.heapMemoryMaxMB || 1024)) * 100)}% Used
-                    </span>
-                  </div>
-
-                  <div style={{ height: '10px', background: 'rgba(255,255,255,0.06)', borderRadius: '5px', overflow: 'hidden', marginBottom: '1rem' }}>
-                    <div style={{
-                      width: `${Math.min(100, Math.round((systemHealth.heapMemoryUsedMB / (systemHealth.heapMemoryMaxMB || 1024)) * 100))}%`,
-                      height: '100%',
-                      background: 'linear-gradient(90deg, #6366f1 0%, #34d399 100%)'
-                    }}></div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                    <div>Used: <strong style={{ color: '#fff' }}>{systemHealth.heapMemoryUsedMB} MB</strong></div>
-                    <div>Allocated: <strong style={{ color: '#fff' }}>{systemHealth.heapMemoryTotalMB} MB</strong></div>
-                    <div>Max: <strong style={{ color: '#fff' }}>{systemHealth.heapMemoryMaxMB} MB</strong></div>
-                  </div>
-                </div>
-
-                {/* Threads & Uptime */}
-                <div className="card" style={{ padding: '1.5rem' }}>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                    <Server size={18} color="#38bdf8" /> Runtime Environment
-                  </h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-subtle)' }}>Active JVM Threads</span>
-                      <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#38bdf8', marginTop: '0.1rem' }}>
-                        {systemHealth.activeThreadCount}
-                      </div>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-subtle)' }}>CPU Cores Available</span>
-                      <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff', marginTop: '0.1rem' }}>
-                        {systemHealth.availableProcessors} Cores
-                      </div>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-subtle)' }}>Server Uptime</span>
-                      <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fff', marginTop: '0.1rem' }}>
-                        {Math.floor(systemHealth.uptimeSeconds / 60)} mins {systemHealth.uptimeSeconds % 60}s
-                      </div>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-subtle)' }}>Java Runtime</span>
-                      <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fff', marginTop: '0.1rem' }}>
-                        Java {systemHealth.javaVersion}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
+          {/* 1. KPI Summary Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', marginBottom: '1.75rem' }}>
+            <div className="card" style={{ padding: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-subtle)', fontSize: '0.8rem', fontWeight: 600 }}>
+                <span>TOTAL CAMPAIGNS</span>
+                <Tag size={18} color="#818cf8" />
               </div>
-
-              {/* Database Entity Tallies */}
-              <div className="card" style={{ padding: '1.75rem' }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                  <Database size={18} color="#34d399" /> PostgreSQL / H2 Database Entity Audit
-                </h3>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
-                  Total persistent rows managed across JPA Entity Repositories.
-                </p>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '1rem' }}>
-                  {Object.entries(systemHealth.entityCounts || {}).map(([table, count]) => (
-                    <div key={table} style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', textAlign: 'center' }}>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-subtle)', fontWeight: 700, textTransform: 'uppercase' }}>{table}</div>
-                      <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff', marginTop: '0.3rem' }}>{count}</div>
-                    </div>
-                  ))}
-                </div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#fff', marginTop: '0.5rem' }}>
+                {couponAnalytics?.totalCoupons || coupons.length}
               </div>
-
+              <div style={{ fontSize: '0.75rem', color: '#34d399', marginTop: '0.25rem' }}>
+                ✓ {couponAnalytics?.activeCoupons || coupons.filter(c => c.active).length} Active Campaigns
+              </div>
             </div>
-          ) : (
-            <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-              Loading system metrics...
+
+            <div className="card" style={{ padding: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-subtle)', fontSize: '0.8rem', fontWeight: 600 }}>
+                <span>TOTAL REDEMPTIONS</span>
+                <CheckCircle size={18} color="#34d399" />
+              </div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#fff', marginTop: '0.5rem' }}>
+                {couponAnalytics?.totalRedemptions || 0}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                Orders with applied discounts
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-subtle)', fontSize: '0.8rem', fontWeight: 600 }}>
+                <span>TOTAL DISCOUNTS GIVEN</span>
+                <Sparkles size={18} color="#fbbf24" />
+              </div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#fbbf24', marginTop: '0.5rem' }}>
+                ₹{(couponAnalytics?.totalDiscountsGiven || 0).toFixed(2)}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                Subsidized promotion value
+              </div>
+            </div>
+
+            <div className="card" style={{ padding: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-subtle)', fontSize: '0.8rem', fontWeight: 600 }}>
+                <span>AVG DISCOUNT / ORDER</span>
+                <Calculator size={18} color="#a78bfa" />
+              </div>
+              <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#a78bfa', marginTop: '0.5rem' }}>
+                ₹{((couponAnalytics?.totalDiscountsGiven || 0) / Math.max(1, (couponAnalytics?.totalRedemptions || 1))).toFixed(2)}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                Customer savings per use
+              </div>
+            </div>
+          </div>
+
+          {/* 2. Top Performing Campaigns Leaderboard */}
+          {couponAnalytics?.topPerformingCoupons && couponAnalytics.topPerformingCoupons.length > 0 && (
+            <div className="card" style={{ padding: '1.5rem', marginBottom: '1.75rem' }}>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fff', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <TrendingUp size={18} color="#818cf8" />
+                Top Performing Promotional Campaigns
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
+                {couponAnalytics.topPerformingCoupons.map((item, index) => (
+                  <div key={item.couponCode} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#818cf8' }}>
+                        #{index + 1} {item.couponCode}
+                      </span>
+                      <span className="badge badge-admin" style={{ fontSize: '0.72rem' }}>
+                        {item.discountType === 'PERCENTAGE' ? `${item.discountValue}% OFF` : `₹${item.discountValue} FLAT`}
+                      </span>
+                    </div>
+                    <div style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Redemptions:</span>
+                      <span style={{ fontWeight: 700, color: '#fff' }}>{item.redemptionCount} times</span>
+                    </div>
+                    <div style={{ marginTop: '0.35rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Total Savings Given:</span>
+                      <span style={{ fontWeight: 800, color: '#34d399' }}>₹{(item.totalDiscountProvided || 0).toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
+
+          {/* 3. Coupon Directory & Campaign Management Table */}
+          <div className="card" style={{ padding: '1.75rem', marginBottom: '1.75rem' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', margin: 0 }}>
+                  Coupon Campaign Directory ({filteredCoupons.length})
+                </h3>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Manage validity windows, discount values, minimum spends, and active statuses.
+                </span>
+              </div>
+
+              {/* Filters */}
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative' }}>
+                  <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-subtle)' }} />
+                  <input
+                    type="text"
+                    placeholder="Search by code or description..."
+                    value={couponSearch}
+                    onChange={(e) => setCouponSearch(e.target.value)}
+                    className="input-field"
+                    style={{ paddingLeft: '2.1rem', fontSize: '0.85rem', width: '230px' }}
+                  />
+                </div>
+
+                <select
+                  value={couponFilterStatus}
+                  onChange={(e) => setCouponFilterStatus(e.target.value)}
+                  className="input-field"
+                  style={{ fontSize: '0.85rem', width: '130px' }}
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="ACTIVE">Active Only</option>
+                  <option value="INACTIVE">Inactive</option>
+                  <option value="EXPIRED">Expired</option>
+                </select>
+
+                <button onClick={() => handleOpenCouponModal()} className="btn btn-primary btn-sm">
+                  <PlusCircle size={14} /> Add Coupon
+                </button>
+              </div>
+            </div>
+
+            {/* Coupons Table */}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-subtle)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                    <th style={{ padding: '0.85rem 1rem' }}>Coupon Code & Offer</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Discount Structure</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Min Order / Cap</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Validity Window</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Redemptions</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Status</th>
+                    <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCoupons.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                        No coupons found matching your criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredCoupons.map((c) => {
+                      const now = new Date();
+                      const isExpired = c.expiryDate && new Date(c.expiryDate) < now;
+                      return (
+                        <tr key={c.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                          <td style={{ padding: '1rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#818cf8', letterSpacing: '0.5px' }}>
+                                {c.code}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem', maxWidth: '280px' }}>
+                              {c.description || 'No description provided.'}
+                            </div>
+                          </td>
+
+                          <td style={{ padding: '1rem' }}>
+                            <div style={{ fontWeight: 700, color: '#fff' }}>
+                              {c.discountType === 'PERCENTAGE' ? `${c.discountValue}% OFF` : `₹${c.discountValue?.toFixed(2)} FLAT`}
+                            </div>
+                            <div style={{ fontSize: '0.74rem', color: 'var(--text-subtle)' }}>
+                              {c.discountType}
+                            </div>
+                          </td>
+
+                          <td style={{ padding: '1rem' }}>
+                            <div style={{ color: 'var(--text-main)' }}>
+                              Min: {c.minOrderAmount ? `₹${c.minOrderAmount.toFixed(2)}` : 'None'}
+                            </div>
+                            <div style={{ fontSize: '0.74rem', color: 'var(--text-subtle)' }}>
+                              Max Cap: {c.maxDiscountAmount ? `₹${c.maxDiscountAmount.toFixed(2)}` : 'Unlimited'}
+                            </div>
+                          </td>
+
+                          <td style={{ padding: '1rem' }}>
+                            <div style={{ fontSize: '0.82rem', color: isExpired ? '#f87171' : 'var(--text-main)' }}>
+                              Exp: {c.expiryDate ? new Date(c.expiryDate).toLocaleDateString() : 'No expiry'}
+                            </div>
+                            <div style={{ fontSize: '0.74rem', color: 'var(--text-subtle)' }}>
+                              Start: {c.startDate ? new Date(c.startDate).toLocaleDateString() : 'Immediate'}
+                            </div>
+                          </td>
+
+                          <td style={{ padding: '1rem' }}>
+                            <div style={{ fontWeight: 600, color: '#fff' }}>
+                              {c.usageCount || 0} {c.usageLimit ? `/ ${c.usageLimit}` : 'uses'}
+                            </div>
+                            <div style={{ fontSize: '0.74rem', color: 'var(--text-subtle)' }}>
+                              Max {c.userUsageLimit || 1}/user
+                            </div>
+                          </td>
+
+                          <td style={{ padding: '1rem' }}>
+                            {isExpired ? (
+                              <span className="badge badge-danger" style={{ fontSize: '0.72rem' }}>
+                                Expired
+                              </span>
+                            ) : c.active ? (
+                              <span className="badge badge-customer" style={{ fontSize: '0.72rem' }}>
+                                Active
+                              </span>
+                            ) : (
+                              <span className="badge badge-warning" style={{ fontSize: '0.72rem' }}>
+                                Inactive
+                              </span>
+                            )}
+                          </td>
+
+                          <td style={{ padding: '1rem', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                              <button
+                                onClick={() => handleToggleCoupon(c.id)}
+                                className="btn btn-secondary btn-sm"
+                                style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem' }}
+                                title={c.active ? 'Deactivate coupon' : 'Activate coupon'}
+                              >
+                                {c.active ? 'Disable' : 'Enable'}
+                              </button>
+
+                              <button
+                                onClick={() => handleOpenCouponModal(c)}
+                                className="btn btn-secondary btn-sm"
+                                style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem' }}
+                                title="Edit coupon details"
+                              >
+                                <Edit2 size={13} />
+                              </button>
+
+                              <button
+                                onClick={() => handleDeleteCoupon(c.id, c.code)}
+                                className="btn btn-danger btn-sm"
+                                style={{ padding: '0.35rem 0.6rem', fontSize: '0.75rem' }}
+                                title="Delete coupon"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* 4. Live Redemption Audit Ledger */}
+          <div className="card" style={{ padding: '1.75rem' }}>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#fff', marginBottom: '0.35rem' }}>
+              Transaction-Level Coupon Redemption Audit Ledger
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
+              Detailed chronological record of customer purchases with applied coupon discounts.
+            </p>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-subtle)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                    <th style={{ padding: '0.85rem 1rem' }}>Coupon Code</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Customer</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Order Reference</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Order Subtotal</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Discount Applied</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Net Amount Paid</th>
+                    <th style={{ padding: '0.85rem 1rem' }}>Redemption Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {couponUsages.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                        No coupon redemptions recorded yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    couponUsages.map((usage) => (
+                      <tr key={usage.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <td style={{ padding: '1rem', fontWeight: 800, color: '#818cf8' }}>
+                          {usage.couponCode}
+                        </td>
+                        <td style={{ padding: '1rem' }}>
+                          <div style={{ fontWeight: 600, color: '#fff' }}>{usage.customerName}</div>
+                          <div style={{ fontSize: '0.76rem', color: 'var(--text-subtle)' }}>{usage.customerEmail}</div>
+                        </td>
+                        <td style={{ padding: '1rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                          {usage.orderNumber}
+                        </td>
+                        <td style={{ padding: '1rem', color: '#fff', fontWeight: 600 }}>
+                          ₹{usage.orderAmount?.toFixed(2)}
+                        </td>
+                        <td style={{ padding: '1rem', color: '#34d399', fontWeight: 800 }}>
+                          - ₹{usage.discountAmount?.toFixed(2)}
+                        </td>
+                        <td style={{ padding: '1rem', color: '#818cf8', fontWeight: 700 }}>
+                          ₹{usage.finalAmount?.toFixed(2)}
+                        </td>
+                        <td style={{ padding: '1rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                          {usage.usedAt ? new Date(usage.usedAt).toLocaleString() : 'N/A'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       )}
+
+
 
       {/* =========================================================================
           MODULE 7: BUSINESS REPORTS
@@ -1834,6 +2619,252 @@ const AdminDashboard = () => {
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-subtle)', marginTop: '0.5rem' }}>Slug: /{c.slug}</div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODULE: WAREHOUSE ALLOCATION & FULFILLMENT (TASK 4)
+      ========================================================================= */}
+      {activeTab === 'WAREHOUSES' && (
+        <WarehouseManagementTab />
+      )}
+
+      {/* =========================================================================
+          CREATE / EDIT COUPON MODAL DIALOG
+      ========================================================================= */}
+      {showCouponModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: '#1e293b',
+            border: '1px solid #334155',
+            borderRadius: '12px',
+            width: '100%',
+            maxWidth: '560px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            padding: '2rem',
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #334155', paddingBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Tag size={22} color="#818cf8" />
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', margin: 0 }}>
+                  {editingCoupon ? `Edit Coupon: ${editingCoupon.code}` : 'Create New Promotional Coupon'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowCouponModal(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-subtle)', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCoupon}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+                {/* Coupon Code */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.35rem' }}>
+                    Coupon Code * (e.g. SAVE20, FESTIVE500)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="SAVE20"
+                    value={couponFormData.code}
+                    onChange={(e) => setCouponFormData({ ...couponFormData, code: e.target.value.toUpperCase() })}
+                    className="input-field"
+                    style={{ textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.5px' }}
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.35rem' }}>
+                    Campaign Description
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Get 20% discount on orders above ₹1,000 (Max discount ₹1,000)"
+                    value={couponFormData.description}
+                    onChange={(e) => setCouponFormData({ ...couponFormData, description: e.target.value })}
+                    className="input-field"
+                  />
+                </div>
+
+                {/* Discount Type & Value */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.35rem' }}>
+                      Discount Type *
+                    </label>
+                    <select
+                      value={couponFormData.discountType}
+                      onChange={(e) => setCouponFormData({ ...couponFormData, discountType: e.target.value })}
+                      className="input-field"
+                    >
+                      <option value="PERCENTAGE">Percentage (%)</option>
+                      <option value="FIXED_AMOUNT">Fixed Amount (₹)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.35rem' }}>
+                      {couponFormData.discountType === 'PERCENTAGE' ? 'Discount Percentage (%) *' : 'Discount Amount (₹) *'}
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      required
+                      placeholder={couponFormData.discountType === 'PERCENTAGE' ? '20' : '500'}
+                      value={couponFormData.discountValue}
+                      onChange={(e) => setCouponFormData({ ...couponFormData, discountValue: e.target.value })}
+                      className="input-field"
+                    />
+                  </div>
+                </div>
+
+                {/* Min Order & Max Discount Cap */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.35rem' }}>
+                      Minimum Order Amount (₹)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="1000 (Optional)"
+                      value={couponFormData.minOrderAmount}
+                      onChange={(e) => setCouponFormData({ ...couponFormData, minOrderAmount: e.target.value })}
+                      className="input-field"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.35rem' }}>
+                      Max Discount Cap (₹)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="1000 (Optional)"
+                      value={couponFormData.maxDiscountAmount}
+                      onChange={(e) => setCouponFormData({ ...couponFormData, maxDiscountAmount: e.target.value })}
+                      className="input-field"
+                    />
+                  </div>
+                </div>
+
+                {/* Validity Dates */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.35rem' }}>
+                      Start Date
+                    </label>
+                    <input
+                      type="date"
+                      value={couponFormData.startDate}
+                      onChange={(e) => setCouponFormData({ ...couponFormData, startDate: e.target.value })}
+                      className="input-field"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.35rem' }}>
+                      Expiry Date
+                    </label>
+                    <input
+                      type="date"
+                      value={couponFormData.expiryDate}
+                      onChange={(e) => setCouponFormData({ ...couponFormData, expiryDate: e.target.value })}
+                      className="input-field"
+                    />
+                  </div>
+                </div>
+
+                {/* Limits */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.35rem' }}>
+                      Total Usage Limit (Marketplace)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="500 (Optional)"
+                      value={couponFormData.usageLimit}
+                      onChange={(e) => setCouponFormData({ ...couponFormData, usageLimit: e.target.value })}
+                      className="input-field"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.35rem' }}>
+                      Limit Per Customer
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="1"
+                      value={couponFormData.userUsageLimit}
+                      onChange={(e) => setCouponFormData({ ...couponFormData, userUsageLimit: e.target.value })}
+                      className="input-field"
+                    />
+                  </div>
+                </div>
+
+                {/* Active Toggle Checkbox */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.5rem' }}>
+                  <input
+                    type="checkbox"
+                    id="couponActiveCheck"
+                    checked={couponFormData.active}
+                    onChange={(e) => setCouponFormData({ ...couponFormData, active: e.target.checked })}
+                    style={{ width: '18px', height: '18px', accentColor: '#4f46e5', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="couponActiveCheck" style={{ fontSize: '0.9rem', color: '#f8fafc', fontWeight: 600, cursor: 'pointer' }}>
+                    Active (Customers can apply this coupon immediately)
+                  </label>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '2rem', borderTop: '1px solid #334155', paddingTop: '1.25rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCouponModal(false)}
+                  className="btn btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={couponSubmitting}
+                  className="btn btn-primary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                >
+                  {couponSubmitting ? <RefreshCw size={15} className="spin-icon" /> : <Check size={16} />}
+                  {editingCoupon ? 'Update Coupon' : 'Create Coupon'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

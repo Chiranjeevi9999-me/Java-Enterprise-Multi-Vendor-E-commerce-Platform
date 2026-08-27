@@ -102,9 +102,9 @@ const ProductCard = ({ product, onSelect, rankBadge }) => {
         {/* Price & Action Row */}
         <div className="product-price-row">
           <div>
-            <span className="price-current">${(product.discountPrice || product.price).toFixed(2)}</span>
+            <span className="price-current">₹{(product.discountPrice || product.price).toFixed(2)}</span>
             {hasDiscount && (
-              <span className="price-original" style={{ marginLeft: '0.4rem' }}>${product.price.toFixed(2)}</span>
+              <span className="price-original" style={{ marginLeft: '0.4rem' }}>₹{product.price.toFixed(2)}</span>
             )}
           </div>
 

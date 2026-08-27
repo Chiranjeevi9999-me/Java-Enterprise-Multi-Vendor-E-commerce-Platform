@@ -90,12 +90,12 @@ const AddProductModal = ({ categories, onClose, onSuccess }) => {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
             <div className="input-group">
-              <label className="input-label">Price ($) *</label>
+              <label className="input-label">Price (₹) *</label>
               <input type="number" step="0.01" name="price" className="input-field" placeholder="199.99" value={formData.price} onChange={handleChange} required />
             </div>
 
             <div className="input-group">
-              <label className="input-label">Discount Price ($)</label>
+              <label className="input-label">Discount Price (₹)</label>
               <input type="number" step="0.01" name="discountPrice" className="input-field" placeholder="149.99" value={formData.discountPrice} onChange={handleChange} />
             </div>
 

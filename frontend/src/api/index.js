@@ -59,3 +59,27 @@ export const adminApi = {
   getUsers: () => api.get('/admin/users'),
   toggleUserStatus: (userId) => api.put(`/admin/users/${userId}/toggle-status`),
 };
+
+export const commissionApi = {
+  calculate: (data) => api.post('/commissions/calculate', data),
+  getAll: (params) => api.get('/commissions', { params }),
+  getByVendor: (vendorId) => api.get(`/commissions/vendor/${vendorId}`),
+  getByOrder: (orderId) => api.get(`/commissions/order/${orderId}`),
+  getSummary: () => api.get('/commissions/summary'),
+  updateStatus: (id, status) => api.put(`/commissions/${id}/status?status=${status}`),
+};
+
+export const couponApi = {
+  validate: (data) => api.post('/coupons/validate', data),
+  getActive: () => api.get('/coupons/active'),
+  getAll: () => api.get('/coupons'),
+  getById: (id) => api.get(`/coupons/${id}`),
+  create: (data) => api.post('/coupons', data),
+  update: (id, data) => api.put(`/coupons/${id}`, data),
+  toggleStatus: (id) => api.put(`/coupons/${id}/toggle-status`),
+  delete: (id) => api.delete(`/coupons/${id}`),
+  getAnalytics: () => api.get('/coupons/analytics'),
+  getUsageHistory: () => api.get('/coupons/usage'),
+};
+
+export { warehouseApi } from './warehouseApi';

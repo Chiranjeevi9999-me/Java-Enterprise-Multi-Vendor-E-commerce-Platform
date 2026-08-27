@@ -5,7 +5,6 @@ import ProductDetailModal from '../components/ProductDetailModal';
 import HeroBanner from '../components/home/HeroBanner';
 import CategoryBar from '../components/home/CategoryBar';
 import BrandSection from '../components/home/BrandSection';
-import PromoBannerGrid from '../components/home/PromoBannerGrid';
 import TestimonialSection from '../components/home/TestimonialSection';
 import NewsletterSection from '../components/home/NewsletterSection';
 import { Sparkles, SlidersHorizontal, Layers, Flame, Award, TrendingUp, RefreshCw, X, ShoppingBag } from 'lucide-react';
@@ -54,11 +53,8 @@ const HomeCatalog = ({ searchQuery, selectedCategory, setSelectedCategory, categ
         onSelectCategory={setSelectedCategory}
       />
 
-      {/* 3. Promotional Deal Banners */}
-      {!isFiltered && <PromoBannerGrid onPromoClick={scrollToCatalog} />}
-
-      {/* 4. Main Products Catalog Section Anchor */}
-      <div ref={catalogRef} style={{ scrollMarginTop: '100px', marginTop: isFiltered ? '1.5rem' : '3rem' }}>
+      {/* 3. Main Products Catalog Section Anchor */}
+      <div ref={catalogRef} style={{ scrollMarginTop: '100px', marginTop: isFiltered ? '1.5rem' : '2.5rem' }}>
         
         {/* Catalog Header & Filter Indicator */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-color)' }}>
@@ -66,7 +62,7 @@ const HomeCatalog = ({ searchQuery, selectedCategory, setSelectedCategory, categ
             <span style={{ fontSize: '0.78rem', color: 'var(--primary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               {isFiltered ? 'Active Search & Category Filter' : 'Verified Vendor Inventory'}
             </span>
-            <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#d41111', letterSpacing: '-0.02em', marginTop: '0.2rem' }}>
+            <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', marginTop: '0.2rem' }}>
               {selectedCategory
                 ? `Category: ${categories.find(c => c.id === selectedCategory)?.name || 'Filtered Products'}`
                 : searchQuery

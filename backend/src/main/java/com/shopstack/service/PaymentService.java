@@ -2,6 +2,7 @@ package com.shopstack.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.shopstack.dto.CouponValidationResponse;
 import com.shopstack.dto.CreateOrderRequest;
 import com.shopstack.dto.PaymentOrderResponse;
 import com.shopstack.dto.PaymentVerificationRequest;
@@ -21,19 +22,33 @@ public class PaymentService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final VendorProfileRepository vendorProfileRepository;
+    private final CommissionService commissionService;
+    private final CouponService couponService;
+    private final WarehouseService warehouseService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public PaymentService(RazorpayService razorpayService, PaymentRepository paymentRepository, OrderRepository orderRepository, ProductRepository productRepository, UserRepository userRepository, VendorProfileRepository vendorProfileRepository) {
+    public PaymentService(RazorpayService razorpayService,
+                          PaymentRepository paymentRepository,
+                          OrderRepository orderRepository,
+                          ProductRepository productRepository,
+                          UserRepository userRepository,
+                          VendorProfileRepository vendorProfileRepository,
+                          CommissionService commissionService,
+                          CouponService couponService,
+                          WarehouseService warehouseService) {
         this.razorpayService = razorpayService;
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
         this.vendorProfileRepository = vendorProfileRepository;
+        this.commissionService = commissionService;
+        this.couponService = couponService;
+        this.warehouseService = warehouseService;
     }
 
     /**
-     * Create payment order (Supports COD and Razorpay Online Checkout).
+     * Create payment order (Supports COD and Razorpay Online Checkout with Coupon Discounts).
      */
     @Transactional
     public PaymentOrderResponse createPaymentOrder(Long customerId, CreateOrderRequest request) {
@@ -41,13 +56,14 @@ public class PaymentService {
                 .orElseThrow(() -> new RuntimeException("Customer user not found"));
 
         if (request.getItems() == null || request.getItems().isEmpty()) {
-            throw new IllegalArgumentException(" items cannot be empty for checkout.");
+            throw new IllegalArgumentException("Items list cannot be empty for checkout.");
         }
 
         PaymentMethod selectedMethod = request.getPaymentMethod() != null ? request.getPaymentMethod() : PaymentMethod.CARD;
 
-        // Validate stock and group items by vendor
+        // Validate stock, calculate total cart subtotal and group items by vendor
         Map<Long, List<CreateOrderRequest.OrderItemRequest>> itemsByVendor = new HashMap<>();
+        double totalCartSubtotal = 0.0;
 
         for (CreateOrderRequest.OrderItemRequest itemReq : request.getItems()) {
             Product product = productRepository.findById(itemReq.getProductId())
@@ -62,9 +78,26 @@ public class PaymentService {
                         + product.getStockQuantity() + ", Requested quantity: " + itemReq.getQuantity());
             }
 
+            double unitPrice = product.getDiscountPrice() != null ? product.getDiscountPrice() : product.getPrice();
+            totalCartSubtotal += (unitPrice * itemReq.getQuantity());
+
             Long vendorId = product.getVendorProfile().getId();
             itemsByVendor.computeIfAbsent(vendorId, k -> new ArrayList<>()).add(itemReq);
         }
+
+        totalCartSubtotal = Math.round(totalCartSubtotal * 100.0) / 100.0;
+
+        // Validate coupon if provided
+        CouponValidationResponse couponValidation = null;
+        if (request.getCouponCode() != null && !request.getCouponCode().trim().isEmpty()) {
+            couponValidation = couponService.validateCoupon(request.getCouponCode(), totalCartSubtotal, customerId);
+            if (!couponValidation.isValid()) {
+                throw new IllegalArgumentException(couponValidation.getMessage());
+            }
+        }
+
+        double totalCouponDiscount = (couponValidation != null && couponValidation.isValid()) ? couponValidation.getDiscountAmount() : 0.0;
+        String appliedCouponCode = (couponValidation != null && couponValidation.isValid()) ? couponValidation.getCouponCode() : null;
 
         String defaultAddress = "Veerapunayunipalli, Kadapa, Andhra Pradesh, 516321, India";
         String shippingAddress = (request.getShippingAddress() != null && !request.getShippingAddress().isBlank())
@@ -82,7 +115,7 @@ public class PaymentService {
                     .orElseThrow(() -> new RuntimeException("Vendor profile not found"));
 
             String orderNumber = "ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-            double vendorOrderTotal = 0.0;
+            double vendorOrderSubtotal = 0.0;
 
             Order order = Order.builder()
                     .orderNumber(orderNumber)
@@ -101,32 +134,45 @@ public class PaymentService {
             for (CreateOrderRequest.OrderItemRequest itemReq : vendorItems) {
                 Product product = productRepository.findById(itemReq.getProductId()).get();
                 double unitPrice = product.getDiscountPrice() != null ? product.getDiscountPrice() : product.getPrice();
-                double subtotal = unitPrice * itemReq.getQuantity();
-                vendorOrderTotal += subtotal;
+                double itemSubtotal = unitPrice * itemReq.getQuantity();
+                vendorOrderSubtotal += itemSubtotal;
 
                 OrderItem orderItem = OrderItem.builder()
                         .order(order)
                         .product(product)
                         .quantity(itemReq.getQuantity())
                         .unitPrice(unitPrice)
-                        .subtotal(subtotal)
+                        .subtotal(itemSubtotal)
                         .build();
 
                 orderItems.add(orderItem);
             }
 
-            double roundedTotal = Math.round(vendorOrderTotal * 100.0) / 100.0;
-            order.setTotalAmount(roundedTotal);
+            vendorOrderSubtotal = Math.round(vendorOrderSubtotal * 100.0) / 100.0;
+
+            // Pro-rate discount for this vendor order
+            double vendorDiscount = 0.0;
+            if (totalCouponDiscount > 0 && totalCartSubtotal > 0) {
+                vendorDiscount = Math.round((vendorOrderSubtotal / totalCartSubtotal) * totalCouponDiscount * 100.0) / 100.0;
+            }
+
+            double vendorFinalAmount = Math.max(0.0, Math.round((vendorOrderSubtotal - vendorDiscount) * 100.0) / 100.0);
+
+            order.setSubtotalAmount(vendorOrderSubtotal);
+            order.setDiscountAmount(vendorDiscount);
+            order.setCouponCode(appliedCouponCode);
+            order.setTotalAmount(vendorFinalAmount);
             order.setItems(orderItems);
 
             Order savedOrder = orderRepository.save(order);
+            commissionService.createOrUpdateCommissionForOrder(savedOrder);
             pendingOrders.add(savedOrder);
             createdOrderIds.add(savedOrder.getId());
 
-            grandTotalAmount += roundedTotal;
+            grandTotalAmount += vendorFinalAmount;
         }
 
-        grandTotalAmount = Math.round(grandTotalAmount * 100.0) / 100.0;
+        grandTotalAmount = Math.max(0.0, Math.round(grandTotalAmount * 100.0) / 100.0);
 
         // Cash on Delivery Flow (No Razorpay call, stock NOT deducted yet)
         if (selectedMethod == PaymentMethod.COD) {
@@ -144,6 +190,13 @@ public class PaymentService {
                 payment.setPaymentMethod(PaymentMethod.COD);
 
                 paymentRepository.save(payment);
+
+                // Record coupon usage for COD orders
+                if (appliedCouponCode != null && totalCouponDiscount > 0) {
+                    for (Order ord : pendingOrders) {
+                        couponService.recordCouponUsage(appliedCouponCode, ord, customer, ord.getSubtotalAmount(), ord.getDiscountAmount(), ord.getTotalAmount());
+                    }
+                }
             } catch (Exception e) {
                 throw new RuntimeException("Error saving COD payment state: " + e.getMessage());
             }
@@ -252,7 +305,26 @@ public class PaymentService {
                     productRepository.save(product);
                 }
 
-                orderRepository.save(order);
+                Order savedOrder = orderRepository.save(order);
+                commissionService.createOrUpdateCommissionForOrder(savedOrder);
+
+                try {
+                    warehouseService.allocateOrder(savedOrder);
+                } catch (Exception e) {
+                    System.err.println("Warehouse auto-allocation notice on payment: " + e.getMessage());
+                }
+
+                // Record coupon usage on verified payment
+                if (savedOrder.getCouponCode() != null && savedOrder.getDiscountAmount() != null && savedOrder.getDiscountAmount() > 0) {
+                    couponService.recordCouponUsage(
+                            savedOrder.getCouponCode(),
+                            savedOrder,
+                            savedOrder.getCustomer(),
+                            savedOrder.getSubtotalAmount(),
+                            savedOrder.getDiscountAmount(),
+                            savedOrder.getTotalAmount()
+                    );
+                }
             }
         }
 

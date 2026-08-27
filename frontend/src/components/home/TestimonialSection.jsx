@@ -1,5 +1,5 @@
 import React from 'react';
-import { Star, Quote, CheckCircle2, Building2, UserCheck } from 'lucide-react';
+import { Star, Quote, CheckCircle2 } from 'lucide-react';
 
 const TESTIMONIALS = [
   {
@@ -32,77 +32,74 @@ const TESTIMONIALS = [
 ];
 
 const TestimonialSection = () => {
-  return (<>
-  </>
-    // <div style={{ margin: '3.5rem 0' }}>
-      
-    //   {/* Header */}
-    //   <div style={{ textAlign: 'center', maxWidth: '600px', margin: '0 auto 2rem' }}>
-    //     <span style={{ fontSize: '0.78rem', color: 'var(--primary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-    //       Platform Trust & Reviews
-    //     </span>
-    //     <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', marginTop: '0.2rem' }}>
-    //       Trusted by Enterprise Merchants & Shoppers
-    //     </h2>
-    //   </div>
+  return (
+    <div style={{ margin: '3.5rem 0' }}>
+      {/* Header */}
+      <div style={{ textAlign: 'center', maxWidth: '600px', margin: '0 auto 2rem' }}>
+        <span style={{ fontSize: '0.78rem', color: 'var(--primary)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          Platform Trust & Reviews
+        </span>
+        <h2 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#fff', letterSpacing: '-0.02em', marginTop: '0.2rem' }}>
+          Trusted by Enterprise Merchants & Shoppers
+        </h2>
+      </div>
 
-    //   {/* Testimonials Grid */}
-    //   <div style={{
-    //     display: 'grid',
-    //     gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-    //     gap: '1.5rem'
-    //   }}>
-    //     {TESTIMONIALS.map((t) => (
-    //       <div
-    //         key={t.id}
-    //         className="glass-panel"
-    //         style={{
-    //           padding: '1.75rem',
-    //           borderRadius: 'var(--radius-lg)',
-    //           display: 'flex',
-    //           flexDirection: 'column',
-    //           justifyContent: 'space-between',
-    //           position: 'relative'
-    //         }}
-    //       >
-    //         <Quote size={28} color="rgba(99, 102, 241, 0.25)" style={{ position: 'absolute', top: '1.25rem', right: '1.25rem' }} />
+      {/* Testimonials Grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        gap: '1.5rem'
+      }}>
+        {TESTIMONIALS.map((t) => (
+          <div
+            key={t.id}
+            className="glass-panel"
+            style={{
+              padding: '1.75rem',
+              borderRadius: 'var(--radius-lg)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              position: 'relative'
+            }}
+          >
+            <Quote size={28} color="rgba(99, 102, 241, 0.25)" style={{ position: 'absolute', top: '1.25rem', right: '1.25rem' }} />
 
-    //         <div>
-    //           {/* Star Rating */}
-    //           <div style={{ display: 'flex', gap: '0.2rem', marginBottom: '1rem', color: '#fbbf24' }}>
-    //             {[...Array(t.rating)].map((_, i) => (
-    //               <Star key={i} size={16} fill="#fbbf24" color="#fbbf24" />
-    //             ))}
-    //           </div>
+            <div>
+              {/* Star Rating */}
+              <div style={{ display: 'flex', gap: '0.2rem', marginBottom: '1rem', color: '#fbbf24' }}>
+                {[...Array(t.rating)].map((_, i) => (
+                  <Star key={i} size={16} fill="#fbbf24" color="#fbbf24" />
+                ))}
+              </div>
 
-    //           <p style={{ fontSize: '0.92rem', color: 'rgba(241, 245, 249, 0.9)', lineHeight: 1.6, marginBottom: '1.5rem', fontStyle: 'italic' }}>
-    //             "{t.comment}"
-    //           </p>
-    //         </div>
+              <p style={{ fontSize: '0.92rem', color: 'rgba(241, 245, 249, 0.9)', lineHeight: 1.6, marginBottom: '1.5rem', fontStyle: 'italic' }}>
+                "{t.comment}"
+              </p>
+            </div>
 
-    //         {/* Author details */}
-    //         <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-    //           <img
-    //             src={t.avatar}
-    //             alt={t.name}
-    //             style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary)' }}
-    //           />
-    //           <div>
-    //             <h4 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#fff' }}>{t.name}</h4>
-    //             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{t.role}</p>
-    //           </div>
+            {/* Author details */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <img
+                src={t.avatar}
+                alt={t.name}
+                style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary)' }}
+              />
+              <div>
+                <h4 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#fff' }}>{t.name}</h4>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{t.role}</p>
+              </div>
 
-    //           <span className="badge badge-customer" style={{ marginLeft: 'auto', fontSize: '0.7rem' }}>
-    //             <CheckCircle2 size={11} /> {t.type}
-    //           </span>
-    //         </div>
-
-    //       </div>
-    //     ))}
-    //   </div>
-
-    // </div>
+              <span className="badge badge-customer" style={{ marginLeft: 'auto', fontSize: '0.7rem' }}>
+                <CheckCircle2 size={11} /> {t.type}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 };
 
 export default TestimonialSection;
+

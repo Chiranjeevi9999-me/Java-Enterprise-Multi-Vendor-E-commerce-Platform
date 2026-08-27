@@ -1,0 +1,12 @@
+package com.shopstack.model;
+
+public enum StockMovementType {
+    INBOUND_RESTOCK,
+    ORDER_ALLOCATION,
+    PICK_CONFIRMED,
+    PACK_VERIFIED,
+    SHIPMENT_PREPARED,
+    SHIPMENT_DISPATCH,
+    ALLOCATION_RELEASED,
+    MANUAL_ADJUSTMENT
+}

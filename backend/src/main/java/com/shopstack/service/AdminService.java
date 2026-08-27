@@ -24,6 +24,8 @@ public class AdminService {
     private final PaymentRepository paymentRepository;
     private final CategoryRepository categoryRepository;
     private final ReviewRepository reviewRepository;
+    private final CommissionRepository commissionRepository;
+    private final CommissionService commissionService;
 
     public AdminService(ProductRepository productRepository,
                         UserRepository userRepository,
@@ -32,7 +34,9 @@ public class AdminService {
                         OrderItemRepository orderItemRepository,
                         PaymentRepository paymentRepository,
                         CategoryRepository categoryRepository,
-                        ReviewRepository reviewRepository) {
+                        ReviewRepository reviewRepository,
+                        CommissionRepository commissionRepository,
+                        CommissionService commissionService) {
         this.productRepository = productRepository;
         this.userRepository = userRepository;
         this.vendorProfileRepository = vendorProfileRepository;
@@ -41,6 +45,8 @@ public class AdminService {
         this.paymentRepository = paymentRepository;
         this.categoryRepository = categoryRepository;
         this.reviewRepository = reviewRepository;
+        this.commissionRepository = commissionRepository;
+        this.commissionService = commissionService;
     }
 
     // 1. Overview System Stats
@@ -315,55 +321,7 @@ public class AdminService {
 
     // 5. Commission Management Summary
     public AdminCommissionSummary getCommissionSummary() {
-        List<VendorProfile> vendors = vendorProfileRepository.findAll();
-        List<Order> orders = orderRepository.findAll();
-
-        double totalGrossSales = 0.0;
-        double totalCommissionEarned = 0.0;
-        List<AdminCommissionSummary.VendorCommissionLine> lines = new ArrayList<>();
-
-        for (VendorProfile v : vendors) {
-            List<Order> vOrders = orders.stream()
-                    .filter(o -> o.getVendorProfile() != null && o.getVendorProfile().getId().equals(v.getId()))
-                    .collect(Collectors.toList());
-
-            double gross = vOrders.stream()
-                    .filter(o -> o.getStatus() != OrderStatus.CANCELLED)
-                    .mapToDouble(Order::getTotalAmount)
-                    .sum();
-            double rate = v.getCommissionRate() != null ? v.getCommissionRate() : 10.0;
-            double comm = gross * (rate / 100.0);
-            double payable = Math.max(0.0, gross - comm);
-
-            totalGrossSales += gross;
-            totalCommissionEarned += comm;
-
-            User u = v.getUser();
-            lines.add(new AdminCommissionSummary.VendorCommissionLine(
-                    v.getId(),
-                    v.getStoreName(),
-                    u != null ? u.getFullName() : "N/A",
-                    u != null ? u.getEmail() : "N/A",
-                    rate,
-                    vOrders.size(),
-                    Math.round(gross * 100.0) / 100.0,
-                    Math.round(comm * 100.0) / 100.0,
-                    Math.round(payable * 100.0) / 100.0,
-                    gross > 0 ? "SETTLED" : "READY"
-            ));
-        }
-
-        double totalVendorPayouts = Math.max(0.0, totalGrossSales - totalCommissionEarned);
-        double avgRate = vendors.isEmpty() ? 0.0 :
-                vendors.stream().mapToDouble(v -> v.getCommissionRate() != null ? v.getCommissionRate() : 10.0).average().orElse(10.0);
-
-        return new AdminCommissionSummary(
-                Math.round(totalGrossSales * 100.0) / 100.0,
-                Math.round(totalCommissionEarned * 100.0) / 100.0,
-                Math.round(totalVendorPayouts * 100.0) / 100.0,
-                Math.round(avgRate * 10.0) / 10.0,
-                lines
-        );
+        return commissionService.getCommissionSummary();
     }
 
     // 6. System Monitoring & JVM Health
@@ -386,6 +344,7 @@ public class AdminService {
         entityCounts.put("Orders", orderRepository.count());
         entityCounts.put("Order Items", orderItemRepository.count());
         entityCounts.put("Payments", paymentRepository.count());
+        entityCounts.put("Commissions", commissionRepository.count());
         entityCounts.put("Categories", categoryRepository.count());
         entityCounts.put("Reviews", reviewRepository.count());
 

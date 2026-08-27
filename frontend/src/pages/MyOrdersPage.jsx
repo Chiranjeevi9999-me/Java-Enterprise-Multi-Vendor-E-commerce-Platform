@@ -1,17 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { orderApi } from '../api';
-import { ShoppingBag, MapPin, RefreshCw, Truck, CreditCard } from 'lucide-react';
+import { orderApi, warehouseApi } from '../api';
+import { ShoppingBag, MapPin, RefreshCw, Truck, CreditCard, Layers, Box, CheckCircle2, Navigation } from 'lucide-react';
 
 const MyOrdersPage = () => {
   const [orders, setOrders] = useState([]);
+  const [allocations, setAllocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const res = await orderApi.getMyOrders();
-      setOrders(res.data || []);
+      const [ordRes, allocRes] = await Promise.all([
+        orderApi.getMyOrders(),
+        warehouseApi.getAllocations().catch(() => ({ data: [] }))
+      ]);
+      setOrders(ordRes.data || []);
+      setAllocations(allocRes.data || []);
     } catch (err) {
       setError('Failed to fetch order history.');
     } finally {
@@ -137,24 +142,57 @@ const MyOrdersPage = () => {
                 })}
               </div>
 
-              {/* Items List */}
+              {/* Items List & Warehouse Allocation Info */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                {ord.items?.map((item) => (
-                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                      <img src={item.product?.imageUrl} alt="" style={{ width: '44px', height: '44px', borderRadius: '6px', objectFit: 'cover' }} />
-                      <div>
-                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9rem' }}>{item.product?.title}</div>
-                        <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                          Qty: {item.quantity} × ₹{item.unitPrice?.toFixed(2)}
+                {ord.items?.map((item) => {
+                  const itemAlloc = allocations.find(a => a.orderItemId === item.id || (a.orderId === ord.id && a.productId === item.product?.id));
+                  
+                  return (
+                    <div key={item.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.85rem 1rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                          <img src={item.product?.imageUrl} alt="" style={{ width: '44px', height: '44px', borderRadius: '6px', objectFit: 'cover' }} />
+                          <div>
+                            <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.9rem' }}>{item.product?.title}</div>
+                            <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                              Qty: {item.quantity} × ₹{item.unitPrice?.toFixed(2)}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.95rem' }}>
+                          ₹{item.subtotal?.toFixed(2)}
                         </div>
                       </div>
+
+                      {/* Warehouse Allocation & Logistics Footnote */}
+                      {itemAlloc && (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', background: '#ffffff', border: '1px solid #e2e8f0', padding: '0.4rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', color: '#475569', marginTop: '0.25rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <Layers size={13} color="#2563eb" />
+                            <span>Fulfilled by: <strong>{itemAlloc.warehouseName}</strong> ({itemAlloc.warehouseCode})</span>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            <span style={{
+                              fontWeight: 700,
+                              padding: '0.15rem 0.5rem',
+                              borderRadius: '10px',
+                              background: itemAlloc.stage === 'SHIPPED' ? '#dcfce7' : itemAlloc.stage === 'READY_FOR_SHIPMENT' ? '#d1fae5' : '#eff6ff',
+                              color: itemAlloc.stage === 'SHIPPED' ? '#15803d' : itemAlloc.stage === 'READY_FOR_SHIPMENT' ? '#047857' : '#1d4ed8'
+                            }}>
+                              Stage: {itemAlloc.stage}
+                            </span>
+                            {itemAlloc.trackingNumber && (
+                              <span style={{ fontWeight: 700, color: '#2563eb' }}>
+                                🚚 {itemAlloc.carrier}: {itemAlloc.trackingNumber}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.95rem' }}>
-                      ₹{item.subtotal?.toFixed(2)}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Footer Row */}

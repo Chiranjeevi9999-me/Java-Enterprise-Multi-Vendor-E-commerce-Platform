@@ -2,6 +2,7 @@ package com.shopstack.config;
 
 import com.shopstack.model.*;
 import com.shopstack.repository.*;
+import com.shopstack.service.CommissionService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -20,6 +21,13 @@ public class DataInitializer implements CommandLineRunner {
     private final ReviewRepository reviewRepository;
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
+    private final CommissionService commissionService;
+    private final CouponRepository couponRepository;
+    private final CouponUsageRepository couponUsageRepository;
+    private final WarehouseRepository warehouseRepository;
+    private final WarehouseInventoryRepository warehouseInventoryRepository;
+    private final OrderWarehouseAllocationRepository allocationRepository;
+    private final StockMovementRepository stockMovementRepository;
     private final PasswordEncoder passwordEncoder;
 
     public DataInitializer(UserRepository userRepository,
@@ -29,6 +37,13 @@ public class DataInitializer implements CommandLineRunner {
                            ReviewRepository reviewRepository,
                            OrderRepository orderRepository,
                            PaymentRepository paymentRepository,
+                           CommissionService commissionService,
+                           CouponRepository couponRepository,
+                           CouponUsageRepository couponUsageRepository,
+                           WarehouseRepository warehouseRepository,
+                           WarehouseInventoryRepository warehouseInventoryRepository,
+                           OrderWarehouseAllocationRepository allocationRepository,
+                           StockMovementRepository stockMovementRepository,
                            PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.vendorProfileRepository = vendorProfileRepository;
@@ -37,6 +52,13 @@ public class DataInitializer implements CommandLineRunner {
         this.reviewRepository = reviewRepository;
         this.orderRepository = orderRepository;
         this.paymentRepository = paymentRepository;
+        this.commissionService = commissionService;
+        this.couponRepository = couponRepository;
+        this.couponUsageRepository = couponUsageRepository;
+        this.warehouseRepository = warehouseRepository;
+        this.warehouseInventoryRepository = warehouseInventoryRepository;
+        this.allocationRepository = allocationRepository;
+        this.stockMovementRepository = stockMovementRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -101,7 +123,7 @@ public class DataInitializer implements CommandLineRunner {
                 .description("Premier vendor for flagship smartphones, audio gear, and modern accessories.")
                 .logoUrl("https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=200&auto=format&fit=crop&q=80")
                 .status(VendorStatus.APPROVED)
-                .commissionRate(8.5)
+                .commissionRate(10.0)
                 .rating(4.9)
                 .build();
 
@@ -111,7 +133,7 @@ public class DataInitializer implements CommandLineRunner {
                 .description("Luxury sustainable fashion, footwear, and designer everyday wear.")
                 .logoUrl("https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=200&auto=format&fit=crop&q=80")
                 .status(VendorStatus.APPROVED)
-                .commissionRate(12.0)
+                .commissionRate(10.0)
                 .rating(4.7)
                 .build();
 
@@ -448,6 +470,395 @@ public class DataInitializer implements CommandLineRunner {
 
         paymentRepository.saveAll(List.of(pay1, pay2, pay3, pay4, pay5));
 
-        System.out.println(">>> [ShopStack DataInitializer] Successfully initialized demo marketplace dataset with live orders & payments.");
+        // 8. Create Corresponding Commission Records for seeded orders
+        commissionService.createOrUpdateCommissionForOrder(order1);
+        commissionService.createOrUpdateCommissionForOrder(order2);
+        commissionService.createOrUpdateCommissionForOrder(order3);
+        commissionService.createOrUpdateCommissionForOrder(order4);
+        commissionService.createOrUpdateCommissionForOrder(order5);
+
+        // 9. Seed Promotional Coupons
+        Coupon save20 = Coupon.builder()
+                .code("SAVE20")
+                .description("Get 20% discount on orders above ₹1,000 (Max discount ₹1,000).")
+                .discountType(DiscountType.PERCENTAGE)
+                .discountValue(20.0)
+                .minOrderAmount(1000.0)
+                .maxDiscountAmount(1000.0)
+                .startDate(now.minusDays(10))
+                .expiryDate(now.plusDays(60))
+                .usageLimit(500)
+                .userUsageLimit(2)
+                .usageCount(3)
+                .active(true)
+                .build();
+
+        Coupon welcome50 = Coupon.builder()
+                .code("WELCOME50")
+                .description("Flat ₹50 discount on your order above ₹200.")
+                .discountType(DiscountType.FIXED_AMOUNT)
+                .discountValue(50.0)
+                .minOrderAmount(200.0)
+                .startDate(now.minusDays(30))
+                .expiryDate(now.plusDays(90))
+                .usageLimit(1000)
+                .userUsageLimit(1)
+                .usageCount(5)
+                .active(true)
+                .build();
+
+        Coupon festive500 = Coupon.builder()
+                .code("FESTIVE500")
+                .description("Festive special offer: Flat ₹500 off on purchases of ₹2,500 or more.")
+                .discountType(DiscountType.FIXED_AMOUNT)
+                .discountValue(500.0)
+                .minOrderAmount(2500.0)
+                .startDate(now.minusDays(5))
+                .expiryDate(now.plusDays(45))
+                .usageLimit(200)
+                .userUsageLimit(3)
+                .usageCount(2)
+                .active(true)
+                .build();
+
+        Coupon flat10 = Coupon.builder()
+                .code("FLAT10")
+                .description("Special 10% discount on all orders above ₹500.")
+                .discountType(DiscountType.PERCENTAGE)
+                .discountValue(10.0)
+                .minOrderAmount(500.0)
+                .maxDiscountAmount(500.0)
+                .startDate(now.minusDays(15))
+                .expiryDate(now.plusDays(30))
+                .usageLimit(300)
+                .userUsageLimit(3)
+                .usageCount(1)
+                .active(true)
+                .build();
+
+        Coupon expired15 = Coupon.builder()
+                .code("EXPIRED15")
+                .description("Flash weekend 15% discount (Expired for testing validation).")
+                .discountType(DiscountType.PERCENTAGE)
+                .discountValue(15.0)
+                .minOrderAmount(100.0)
+                .startDate(now.minusDays(20))
+                .expiryDate(now.minusDays(5))
+                .usageLimit(100)
+                .userUsageLimit(1)
+                .usageCount(8)
+                .active(true)
+                .build();
+
+        couponRepository.saveAll(List.of(save20, welcome50, festive500, flat10, expired15));
+
+        // 10. Seed Sample Coupon Usages
+        CouponUsage usage1 = CouponUsage.builder()
+                .coupon(save20)
+                .user(customer1)
+                .order(order1)
+                .orderAmount(2000.0)
+                .discountAmount(400.0)
+                .finalAmount(1600.0)
+                .usedAt(now.minusDays(5))
+                .build();
+
+        CouponUsage usage2 = CouponUsage.builder()
+                .coupon(welcome50)
+                .user(customer2)
+                .order(order2)
+                .orderAmount(450.0)
+                .discountAmount(50.0)
+                .finalAmount(400.0)
+                .usedAt(now.minusDays(3))
+                .build();
+
+        CouponUsage usage3 = CouponUsage.builder()
+                .coupon(festive500)
+                .user(customer1)
+                .order(order3)
+                .orderAmount(3200.0)
+                .discountAmount(500.0)
+                .finalAmount(2700.0)
+                .usedAt(now.minusDays(2))
+                .build();
+
+        couponUsageRepository.saveAll(List.of(usage1, usage2, usage3));
+
+        // 11. Seed Warehouses
+        Warehouse whHyd = Warehouse.builder()
+                .code("WH-HYD-01")
+                .name("Central Metro Fulfillment Hub")
+                .address("Logistics Park Plot 44, Gachibowli Outer Ring Rd")
+                .city("Hyderabad")
+                .state("Telangana")
+                .country("India")
+                .pincode("500032")
+                .contactPhone("+91 40 4829 1100")
+                .contactEmail("hyd-hub@shopstack.com")
+                .capacity(65000)
+                .active(true)
+                .build();
+
+        Warehouse whMum = Warehouse.builder()
+                .code("WH-MUM-01")
+                .name("Western Express Logistics Hub")
+                .address("Bhiwandi Integrated Warehousing Zone, Sector 8")
+                .city("Mumbai")
+                .state("Maharashtra")
+                .country("India")
+                .pincode("421302")
+                .contactPhone("+91 22 6194 2200")
+                .contactEmail("mum-hub@shopstack.com")
+                .capacity(85000)
+                .active(true)
+                .build();
+
+        Warehouse whBlr = Warehouse.builder()
+                .code("WH-BLR-01")
+                .name("Southern Distribution Center")
+                .address("Electronic City Phase 2, Industrial Cluster")
+                .city("Bengaluru")
+                .state("Karnataka")
+                .country("India")
+                .pincode("560100")
+                .contactPhone("+91 80 4392 3300")
+                .contactEmail("blr-hub@shopstack.com")
+                .capacity(70000)
+                .active(true)
+                .build();
+
+        Warehouse whDel = Warehouse.builder()
+                .code("WH-DEL-01")
+                .name("Northern Capital Depot")
+                .address("Okhla Industrial Area Phase 3, Cargo Block D")
+                .city("New Delhi")
+                .state("Delhi")
+                .country("India")
+                .pincode("110020")
+                .contactPhone("+91 11 4102 4400")
+                .contactEmail("del-hub@shopstack.com")
+                .capacity(50000)
+                .active(true)
+                .build();
+
+        warehouseRepository.saveAll(List.of(whHyd, whMum, whBlr, whDel));
+
+        // 12. Seed Warehouse Inventories for Catalog Products
+        WarehouseInventory invP1Hyd = WarehouseInventory.builder()
+                .warehouse(whHyd).product(p1).totalStock(25).allocatedStock(0).availableStock(25).aisleLocation("Aisle 02, Bay B-04").minThreshold(8).lastRestockedAt(now.minusDays(7)).build();
+        WarehouseInventory invP1Mum = WarehouseInventory.builder()
+                .warehouse(whMum).product(p1).totalStock(20).allocatedStock(0).availableStock(20).aisleLocation("Aisle 01, Bay A-11").minThreshold(5).lastRestockedAt(now.minusDays(6)).build();
+
+        WarehouseInventory invP2Hyd = WarehouseInventory.builder()
+                .warehouse(whHyd).product(p2).totalStock(8).allocatedStock(0).availableStock(8).aisleLocation("Aisle 04, Secure Vault 2").minThreshold(3).lastRestockedAt(now.minusDays(10)).build();
+        WarehouseInventory invP2Del = WarehouseInventory.builder()
+                .warehouse(whDel).product(p2).totalStock(4).allocatedStock(0).availableStock(4).aisleLocation("Aisle 02, Secure Vault 1").minThreshold(2).lastRestockedAt(now.minusDays(8)).build();
+
+        WarehouseInventory invP3Blr = WarehouseInventory.builder()
+                .warehouse(whBlr).product(p3).totalStock(50).allocatedStock(2).availableStock(48).aisleLocation("Aisle 06, Rack C-09").minThreshold(15).lastRestockedAt(now.minusDays(4)).build();
+        WarehouseInventory invP3Mum = WarehouseInventory.builder()
+                .warehouse(whMum).product(p3).totalStock(30).allocatedStock(0).availableStock(30).aisleLocation("Aisle 05, Rack D-02").minThreshold(10).lastRestockedAt(now.minusDays(5)).build();
+
+        WarehouseInventory invP4Hyd = WarehouseInventory.builder()
+                .warehouse(whHyd).product(p4).totalStock(15).allocatedStock(0).availableStock(15).aisleLocation("Aisle 03, Glass Bay G-01").minThreshold(5).lastRestockedAt(now.minusDays(12)).build();
+        WarehouseInventory invP4Blr = WarehouseInventory.builder()
+                .warehouse(whBlr).product(p4).totalStock(10).allocatedStock(0).availableStock(10).aisleLocation("Aisle 03, Glass Bay G-04").minThreshold(4).lastRestockedAt(now.minusDays(9)).build();
+
+        WarehouseInventory invP5Mum = WarehouseInventory.builder()
+                .warehouse(whMum).product(p5).totalStock(40).allocatedStock(0).availableStock(40).aisleLocation("Aisle 08, Rack E-14").minThreshold(12).lastRestockedAt(now.minusDays(3)).build();
+        WarehouseInventory invP5Del = WarehouseInventory.builder()
+                .warehouse(whDel).product(p5).totalStock(20).allocatedStock(0).availableStock(20).aisleLocation("Aisle 07, Rack F-05").minThreshold(6).lastRestockedAt(now.minusDays(4)).build();
+
+        warehouseInventoryRepository.saveAll(List.of(
+                invP1Hyd, invP1Mum, invP2Hyd, invP2Del, invP3Blr, invP3Mum, invP4Hyd, invP4Blr, invP5Mum, invP5Del
+        ));
+
+        // 13. Seed Order Warehouse Allocations across fulfillment stages
+        // Order 1 (Delivered -> Dispatched/Shipped stage)
+        OrderWarehouseAllocation alloc1 = OrderWarehouseAllocation.builder()
+                .order(order1)
+                .orderItem(item1)
+                .warehouse(whHyd)
+                .allocatedQuantity(1)
+                .stage(StockMovementStage.SHIPPED)
+                .aisleLocation("Aisle 02, Bay B-04")
+                .pickerName("Vikram Rao")
+                .pickedAt(now.minusDays(5).plusHours(1))
+                .packerName("Anita Sharma")
+                .packedAt(now.minusDays(5).plusHours(2))
+                .packageWeightKg(0.75)
+                .boxDimension("25x18x12 cm")
+                .boxType("Electro-Shield Box E1")
+                .packingSlipNumber("PS-HYD-9011")
+                .carrier("BlueDart Express")
+                .trackingNumber("TRK-BLD-778291")
+                .readyForShipmentAt(now.minusDays(5).plusHours(3))
+                .dispatchedAt(now.minusDays(5).plusHours(4))
+                .notes("Standard priority express shipment")
+                .createdAt(now.minusDays(5))
+                .build();
+
+        // Order 2 (Shipped)
+        OrderWarehouseAllocation alloc2 = OrderWarehouseAllocation.builder()
+                .order(order2)
+                .orderItem(item2)
+                .warehouse(whHyd)
+                .allocatedQuantity(1)
+                .stage(StockMovementStage.SHIPPED)
+                .aisleLocation("Aisle 04, Secure Vault 2")
+                .pickerName("Vikram Rao")
+                .pickedAt(now.minusDays(3).plusHours(1))
+                .packerName("Anita Sharma")
+                .packedAt(now.minusDays(3).plusHours(2))
+                .packageWeightKg(2.4)
+                .boxDimension("40x30x10 cm")
+                .boxType("Reinforced Heavy Laptop Carton #3")
+                .packingSlipNumber("PS-HYD-9022")
+                .carrier("FedEx SupplyChain")
+                .trackingNumber("TRK-FDX-382910")
+                .readyForShipmentAt(now.minusDays(3).plusHours(3))
+                .dispatchedAt(now.minusDays(3).plusHours(4))
+                .notes("Fragile electronics - bubble wrapped with tamper-evident seal")
+                .createdAt(now.minusDays(3))
+                .build();
+
+        // Order 3 (Items 3a & 3b -> Ready for Shipment)
+        OrderWarehouseAllocation alloc3a = OrderWarehouseAllocation.builder()
+                .order(order3)
+                .orderItem(item3a)
+                .warehouse(whBlr)
+                .allocatedQuantity(1)
+                .stage(StockMovementStage.READY_FOR_SHIPMENT)
+                .aisleLocation("Aisle 06, Rack C-09")
+                .pickerName("Ramesh Kumar")
+                .pickedAt(now.minusDays(2).plusHours(1))
+                .packerName("Pooja Nair")
+                .packedAt(now.minusDays(2).plusHours(2))
+                .packageWeightKg(0.6)
+                .boxDimension("30x25x10 cm")
+                .boxType("Eco Apparel Pouch #2")
+                .packingSlipNumber("PS-BLR-8812")
+                .carrier("Delhivery Air")
+                .trackingNumber("TRK-DLV-554190")
+                .readyForShipmentAt(now.minusDays(2).plusHours(3))
+                .notes("Apparel fold-packed in sealed waterproof bag")
+                .createdAt(now.minusDays(2))
+                .build();
+
+        OrderWarehouseAllocation alloc3b = OrderWarehouseAllocation.builder()
+                .order(order3)
+                .orderItem(item3b)
+                .warehouse(whHyd)
+                .allocatedQuantity(1)
+                .stage(StockMovementStage.READY_FOR_SHIPMENT)
+                .aisleLocation("Aisle 03, Glass Bay G-01")
+                .pickerName("Vikram Rao")
+                .pickedAt(now.minusDays(2).plusHours(1))
+                .packerName("Anita Sharma")
+                .packedAt(now.minusDays(2).plusHours(2))
+                .packageWeightKg(0.4)
+                .boxDimension("15x15x12 cm")
+                .boxType("Luxury Velvet Box #1")
+                .packingSlipNumber("PS-HYD-9033")
+                .carrier("BlueDart Express")
+                .trackingNumber("TRK-BLD-662914")
+                .readyForShipmentAt(now.minusDays(2).plusHours(3))
+                .notes("Premium watch in cushioned jewelry box")
+                .createdAt(now.minusDays(2))
+                .build();
+
+        // Order 4 (Processing -> Packed stage)
+        OrderWarehouseAllocation alloc4 = OrderWarehouseAllocation.builder()
+                .order(order4)
+                .orderItem(item4)
+                .warehouse(whMum)
+                .allocatedQuantity(2)
+                .stage(StockMovementStage.PACKED)
+                .aisleLocation("Aisle 08, Rack E-14")
+                .pickerName("Sanjay Patel")
+                .pickedAt(now.minusDays(1).plusHours(2))
+                .packerName("Deepa Joshi")
+                .packedAt(now.minusDays(1).plusHours(3))
+                .packageWeightKg(1.8)
+                .boxDimension("35x25x20 cm")
+                .boxType("Corrugated Home Goods Box #4")
+                .packingSlipNumber("PS-MUM-7714")
+                .notes("Desk lamps packed with foam end-caps")
+                .createdAt(now.minusDays(1))
+                .build();
+
+        // Order 5 (Confirmed -> Allocated stage)
+        OrderWarehouseAllocation alloc5 = OrderWarehouseAllocation.builder()
+                .order(order5)
+                .orderItem(item5)
+                .warehouse(whBlr)
+                .allocatedQuantity(2)
+                .stage(StockMovementStage.ALLOCATED)
+                .aisleLocation("Aisle 06, Rack C-09")
+                .notes("Order confirmed; awaiting warehouse pick wave")
+                .createdAt(now.minusHours(4))
+                .build();
+
+        allocationRepository.saveAll(List.of(alloc1, alloc2, alloc3a, alloc3b, alloc4, alloc5));
+
+        // 14. Seed Stock Movement History Logs
+        StockMovement mov1 = StockMovement.builder()
+                .warehouse(whHyd).product(p1).order(order1).orderItem(item1)
+                .movementType(StockMovementType.ORDER_ALLOCATION).stage(StockMovementStage.ALLOCATED)
+                .quantity(1).previousAvailableStock(26).newAvailableStock(25)
+                .previousAllocatedStock(0).newAllocatedStock(1)
+                .previousTotalStock(26).newTotalStock(26)
+                .referenceNumber("ORD-2026-0814-101").notes("Stock allocated for order ORD-2026-0814-101")
+                .performedBy("System Auto-Allocation Engine").createdAt(now.minusDays(5)).build();
+
+        StockMovement mov2 = StockMovement.builder()
+                .warehouse(whHyd).product(p1).order(order1).orderItem(item1)
+                .movementType(StockMovementType.PICK_CONFIRMED).stage(StockMovementStage.PICKED)
+                .quantity(1).previousAvailableStock(25).newAvailableStock(25)
+                .previousAllocatedStock(1).newAllocatedStock(1)
+                .previousTotalStock(26).newTotalStock(26)
+                .referenceNumber("ORD-2026-0814-101").notes("Item picked from Aisle 02 by Vikram Rao")
+                .performedBy("Vikram Rao").createdAt(now.minusDays(5).plusHours(1)).build();
+
+        StockMovement mov3 = StockMovement.builder()
+                .warehouse(whHyd).product(p1).order(order1).orderItem(item1)
+                .movementType(StockMovementType.PACK_VERIFIED).stage(StockMovementStage.PACKED)
+                .quantity(1).previousAvailableStock(25).newAvailableStock(25)
+                .previousAllocatedStock(1).newAllocatedStock(1)
+                .previousTotalStock(26).newTotalStock(26)
+                .referenceNumber("ORD-2026-0814-101").notes("Packed in Electro-Shield Box E1 by Anita Sharma")
+                .performedBy("Anita Sharma").createdAt(now.minusDays(5).plusHours(2)).build();
+
+        StockMovement mov4 = StockMovement.builder()
+                .warehouse(whHyd).product(p1).order(order1).orderItem(item1)
+                .movementType(StockMovementType.SHIPMENT_PREPARED).stage(StockMovementStage.READY_FOR_SHIPMENT)
+                .quantity(1).previousAvailableStock(25).newAvailableStock(25)
+                .previousAllocatedStock(1).newAllocatedStock(0)
+                .previousTotalStock(26).newTotalStock(25)
+                .referenceNumber("TRK-BLD-778291").notes("Shipment ready via BlueDart Express (TRK-BLD-778291)")
+                .performedBy("Shipping Dispatcher").createdAt(now.minusDays(5).plusHours(3)).build();
+
+        StockMovement mov5 = StockMovement.builder()
+                .warehouse(whHyd).product(p1).order(order1).orderItem(item1)
+                .movementType(StockMovementType.SHIPMENT_DISPATCH).stage(StockMovementStage.SHIPPED)
+                .quantity(1).previousAvailableStock(25).newAvailableStock(25)
+                .previousAllocatedStock(0).newAllocatedStock(0)
+                .previousTotalStock(25).newTotalStock(25)
+                .referenceNumber("TRK-BLD-778291").notes("Handed over to carrier for customer delivery")
+                .performedBy("Logistics Coordinator").createdAt(now.minusDays(5).plusHours(4)).build();
+
+        StockMovement mov6 = StockMovement.builder()
+                .warehouse(whBlr).product(p3).order(order5).orderItem(item5)
+                .movementType(StockMovementType.ORDER_ALLOCATION).stage(StockMovementStage.ALLOCATED)
+                .quantity(2).previousAvailableStock(50).newAvailableStock(48)
+                .previousAllocatedStock(0).newAllocatedStock(2)
+                .previousTotalStock(50).newTotalStock(50)
+                .referenceNumber("ORD-2026-0819-105").notes("Stock allocated for order ORD-2026-0819-105")
+                .performedBy("System Auto-Allocation Engine").createdAt(now.minusHours(4)).build();
+
+        stockMovementRepository.saveAll(List.of(mov1, mov2, mov3, mov4, mov5, mov6));
+
+        System.out.println(">>> [ShopStack DataInitializer] Successfully initialized demo marketplace dataset with live orders, payments, commissions, promotional coupons & regional warehouse fulfillment network.");
     }
 }

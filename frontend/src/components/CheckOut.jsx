@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { paymentApi } from '../api';
+import { paymentApi, couponApi } from '../api';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   MapPin, Lock, ArrowLeft, RefreshCw, AlertTriangle, ShieldCheck, Check, 
-  CreditCard, Smartphone, Building2, Banknote, CheckCircle2, ChevronRight, HelpCircle
+  CreditCard, Smartphone, Building2, Banknote, CheckCircle2, ChevronRight, HelpCircle,
+  Tag, Percent, Sparkles, X, CheckCircle
 } from 'lucide-react';
 import PaymentProcessingModal from './PaymentProcessingModal';
 
@@ -42,6 +43,19 @@ const CheckOut = () => {
   const [error, setError] = useState('');
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Coupon State
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState('');
+  const [activeOffers, setActiveOffers] = useState([]);
+
+  useEffect(() => {
+    couponApi.getActive()
+      .then(res => setActiveOffers(res.data || []))
+      .catch(() => setActiveOffers([]));
+  }, []);
 
   // Payment Processing State: 'IDLE' | 'PROCESSING' | 'SUCCESS' | 'FAILED'
   const [paymentState, setPaymentState] = useState('IDLE');
@@ -104,7 +118,7 @@ const CheckOut = () => {
     setCardData({ ...cardData, cvv: raw });
   };
 
-  // Calculate Order Totals
+  // Calculate Order Totals with Coupon Discount
   const calculateTotals = () => {
     let originalTotal = 0;
     let finalTotal = 0;
@@ -115,14 +129,64 @@ const CheckOut = () => {
       finalTotal += price * item.quantity;
       originalTotal += original * item.quantity;
     });
+
+    const roundedOriginal = Math.round(originalTotal * 100) / 100;
+    const roundedCartFinal = Math.round(finalTotal * 100) / 100;
+    const catalogDiscount = Math.round((roundedOriginal - roundedCartFinal) * 100) / 100;
+    const couponDiscount = appliedCoupon ? Math.round(appliedCoupon.discountAmount * 100) / 100 : 0.0;
+    const netPayable = Math.max(0.0, Math.round((roundedCartFinal - couponDiscount) * 100) / 100);
+
     return { 
-      originalTotal: Math.round(originalTotal * 100) / 100, 
-      finalTotal: Math.round(finalTotal * 100) / 100, 
-      totalDiscount: Math.round((originalTotal - finalTotal) * 100) / 100 
+      originalTotal: roundedOriginal, 
+      cartFinalTotal: roundedCartFinal, 
+      catalogDiscount,
+      couponDiscount,
+      finalTotal: netPayable, 
+      totalDiscount: Math.round((catalogDiscount + couponDiscount) * 100) / 100
     };
   };
 
-  const { originalTotal, finalTotal, totalDiscount } = calculateTotals();
+  const { originalTotal, cartFinalTotal, catalogDiscount, couponDiscount, finalTotal, totalDiscount } = calculateTotals();
+
+  const handleApplyCoupon = async (codeToUse) => {
+    const targetCode = (codeToUse || couponInput || '').trim();
+    if (!targetCode) {
+      setCouponError('Please enter a coupon code.');
+      return;
+    }
+
+    setCouponLoading(true);
+    setCouponError('');
+
+    try {
+      const res = await couponApi.validate({
+        couponCode: targetCode,
+        orderAmount: cartFinalTotal,
+        userId: user?.id || null
+      });
+
+      if (res.data.valid) {
+        setAppliedCoupon(res.data);
+        setCouponInput(res.data.couponCode);
+        setCouponError('');
+      } else {
+        setAppliedCoupon(null);
+        setCouponError(res.data.message || 'Invalid coupon code.');
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to validate coupon code.';
+      setCouponError(msg);
+      setAppliedCoupon(null);
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setCouponError('');
+  };
 
   const handleCloseModal = () => {
     setPaymentState('IDLE');
@@ -156,6 +220,7 @@ const CheckOut = () => {
         const payload = {
           shippingAddress: fullAddress,
           paymentMethod: 'COD',
+          couponCode: appliedCoupon?.couponCode || null,
           items: cart.map((item) => ({
             productId: item.product.id,
             quantity: item.quantity,
@@ -190,6 +255,7 @@ const CheckOut = () => {
       const payload = {
         shippingAddress: fullAddress,
         paymentMethod: selectedPaymentMethod,
+        couponCode: appliedCoupon?.couponCode || null,
         items: cart.map((item) => ({
           productId: item.product.id,
           quantity: item.quantity,
@@ -834,20 +900,155 @@ const CheckOut = () => {
           top: '90px',
           boxShadow: '0 4px 25px rgba(0,0,0,0.3)'
         }}>
-          <h2 style={{ fontSize: '1.2rem', color: '#f8fafc', fontWeight: 800, marginBottom: '1.5rem', marginTop: 0 }}>
+          <h2 style={{ fontSize: '1.2rem', color: '#f8fafc', fontWeight: 800, marginBottom: '1.25rem', marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Tag size={20} color="#818cf8" />
             Payment Summary
           </h2>
 
+          {/* Coupon Code Section */}
+          <div style={{ background: '#1e293b', padding: '1rem', borderRadius: '10px', border: '1px solid #334155', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#f8fafc', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <Sparkles size={14} color="#fbbf24" /> Apply Promo Coupon
+              </span>
+            </div>
+
+            {!appliedCoupon ? (
+              <div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type="text"
+                    placeholder="e.g. SAVE20, WELCOME50"
+                    value={couponInput}
+                    onChange={(e) => {
+                      setCouponInput(e.target.value.toUpperCase());
+                      setCouponError('');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleApplyCoupon();
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '0.6rem 0.75rem',
+                      background: '#0f172a',
+                      border: couponError ? '1px solid #ef4444' : '1px solid #334155',
+                      borderRadius: '6px',
+                      color: '#f8fafc',
+                      fontSize: '0.88rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.5px'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleApplyCoupon()}
+                    disabled={couponLoading || !couponInput.trim()}
+                    style={{
+                      padding: '0.6rem 1rem',
+                      background: '#4f46e5',
+                      border: 'none',
+                      borderRadius: '6px',
+                      color: '#fff',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: (couponLoading || !couponInput.trim()) ? 'not-allowed' : 'pointer',
+                      opacity: (couponLoading || !couponInput.trim()) ? 0.6 : 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.3rem'
+                    }}
+                  >
+                    {couponLoading ? <RefreshCw size={14} className="spin-icon" /> : 'Apply'}
+                  </button>
+                </div>
+
+                {couponError && (
+                  <div style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <AlertTriangle size={13} /> {couponError}
+                  </div>
+                )}
+
+                {/* Available Quick Offers */}
+                {activeOffers.length > 0 && (
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <span style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'block', marginBottom: '0.35rem' }}>Available Offers:</span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      {activeOffers.slice(0, 3).map(offer => (
+                        <button
+                          key={offer.id}
+                          type="button"
+                          onClick={() => handleApplyCoupon(offer.code)}
+                          style={{
+                            background: 'rgba(99, 102, 241, 0.15)',
+                            border: '1px dashed #818cf8',
+                            borderRadius: '4px',
+                            padding: '3px 8px',
+                            color: '#c7d2fe',
+                            fontSize: '0.74rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                          title={offer.description}
+                        >
+                          🏷️ {offer.code} ({offer.discountType === 'PERCENTAGE' ? `${offer.discountValue}% OFF` : `₹${offer.discountValue} OFF`})
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid #10b981', borderRadius: '6px', padding: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <CheckCircle size={16} color="#10b981" />
+                    <div>
+                      <span style={{ fontWeight: 800, color: '#34d399', fontSize: '0.9rem' }}>{appliedCoupon.couponCode}</span>
+                      <div style={{ fontSize: '0.75rem', color: '#a7f3d0' }}>{appliedCoupon.message}</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRemoveCoupon}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#f87171',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '2px'
+                    }}
+                  >
+                    <X size={13} /> Remove
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem', borderBottom: '1px solid #1f2937', paddingBottom: '1.25rem', marginBottom: '1.25rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: '#cbd5e1', fontSize: '0.92rem' }}>
-              <span>Subtotal ({cart.reduce((sum, item) => sum + item.quantity, 0)} items)</span>
+              <span>Cart Subtotal ({cart.reduce((sum, item) => sum + item.quantity, 0)} items)</span>
               <span style={{ fontWeight: 600, color: '#f8fafc' }}>₹{formatPrice(originalTotal)}</span>
             </div>
             
-            {totalDiscount > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#34d399', fontSize: '0.92rem', fontWeight: 600 }}>
-                <span>Discount Savings</span>
-                <span>- ₹{formatPrice(totalDiscount)}</span>
+            {catalogDiscount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '0.92rem' }}>
+                <span>Store Product Discounts</span>
+                <span>- ₹{formatPrice(catalogDiscount)}</span>
+              </div>
+            )}
+
+            {couponDiscount > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#34d399', fontSize: '0.92rem', fontWeight: 700 }}>
+                <span>Coupon ({appliedCoupon?.couponCode})</span>
+                <span>- ₹{formatPrice(couponDiscount)}</span>
               </div>
             )}
             

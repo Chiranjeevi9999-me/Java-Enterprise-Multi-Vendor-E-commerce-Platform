@@ -44,6 +44,9 @@ class ShopStackBackendApplicationTests {
     private OrderRepository orderRepository;
 
     @Autowired
+    private CommissionRepository commissionRepository;
+
+    @Autowired
     private PaymentRepository paymentRepository;
 
     private User customer;
@@ -97,6 +100,11 @@ class ShopStackBackendApplicationTests {
         List<Order> orders = orderRepository.findByCustomerIdOrderByCreatedAtDesc(customer.getId());
         assertFalse(orders.isEmpty());
         assertEquals(OrderStatus.PENDING, orders.get(0).getStatus());
+
+        // Verify Commission record was created for the pending order
+        var commOpt = commissionRepository.findByOrderId(orders.get(0).getId());
+        assertTrue(commOpt.isPresent(), "Commission record must be created for order");
+        assertEquals(CommissionStatus.PENDING, commOpt.get().getStatus());
     }
 
     @Test
@@ -128,6 +136,17 @@ class ShopStackBackendApplicationTests {
         // Verify stock quantity is reduced by 2
         Product updatedProduct = productRepository.findById(sampleProduct.getId()).orElseThrow();
         assertEquals(initialStock - 2, updatedProduct.getStockQuantity());
+
+        // Verify Commission record is marked SETTLED/CALCULATED and amounts are accurate
+        List<Order> orders = orderRepository.findByCustomerIdOrderByCreatedAtDesc(customer.getId());
+        Order confirmedOrder = orders.get(0);
+        var commOpt = commissionRepository.findByOrderId(confirmedOrder.getId());
+        assertTrue(commOpt.isPresent());
+        Commission comm = commOpt.get();
+        assertEquals(CommissionStatus.SETTLED, comm.getStatus());
+        assertEquals(confirmedOrder.getTotalAmount(), comm.getOrderAmount(), 0.01);
+        assertTrue(comm.getCommissionAmount() > 0);
+        assertEquals(Math.round((comm.getOrderAmount() - comm.getCommissionAmount()) * 100.0) / 100.0, comm.getVendorAmount(), 0.01);
     }
 
     @Test

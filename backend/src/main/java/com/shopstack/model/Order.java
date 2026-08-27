@@ -28,6 +28,12 @@ public class Order {
     @Column(nullable = false)
     private Double totalAmount;
 
+    private Double subtotalAmount;
+
+    private Double discountAmount = 0.0;
+
+    private String couponCode;
+
     @Enumerated(EnumType.STRING)
     private OrderStatus status = OrderStatus.CONFIRMED;
 
@@ -44,20 +50,29 @@ public class Order {
     @JsonManagedReference
     private List<OrderItem> items = new ArrayList<>();
 
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonManagedReference
+    private List<OrderWarehouseAllocation> warehouseAllocations = new ArrayList<>();
+
     private LocalDateTime createdAt;
 
     public Order() {}
 
-    public Order(Long id, String orderNumber, User customer, VendorProfile vendorProfile, Double totalAmount, OrderStatus status, String shippingAddress, List<OrderItem> items, LocalDateTime createdAt) {
+    public Order(Long id, String orderNumber, User customer, VendorProfile vendorProfile, Double totalAmount,
+                 Double subtotalAmount, Double discountAmount, String couponCode,
+                 OrderStatus status, String shippingAddress, List<OrderItem> items, LocalDateTime createdAt) {
         this.id = id;
         this.orderNumber = orderNumber;
         this.customer = customer;
         this.vendorProfile = vendorProfile;
         this.totalAmount = totalAmount;
+        this.subtotalAmount = subtotalAmount != null ? subtotalAmount : totalAmount;
+        this.discountAmount = discountAmount != null ? discountAmount : 0.0;
+        this.couponCode = couponCode;
         this.status = status != null ? status : OrderStatus.CONFIRMED;
         this.shippingAddress = shippingAddress;
         if (items != null) {
-            this.items = items;
+            this.items = new ArrayList<>(items);
         }
         this.createdAt = createdAt;
     }
@@ -66,6 +81,12 @@ public class Order {
     protected void onCreate() {
         if (this.createdAt == null) {
             this.createdAt = LocalDateTime.now();
+        }
+        if (this.discountAmount == null) {
+            this.discountAmount = 0.0;
+        }
+        if (this.subtotalAmount == null) {
+            this.subtotalAmount = this.totalAmount;
         }
     }
 
@@ -85,6 +106,15 @@ public class Order {
     public Double getTotalAmount() { return totalAmount; }
     public void setTotalAmount(Double totalAmount) { this.totalAmount = totalAmount; }
 
+    public Double getSubtotalAmount() { return subtotalAmount; }
+    public void setSubtotalAmount(Double subtotalAmount) { this.subtotalAmount = subtotalAmount; }
+
+    public Double getDiscountAmount() { return discountAmount; }
+    public void setDiscountAmount(Double discountAmount) { this.discountAmount = discountAmount; }
+
+    public String getCouponCode() { return couponCode; }
+    public void setCouponCode(String couponCode) { this.couponCode = couponCode; }
+
     public OrderStatus getStatus() { return status; }
     public void setStatus(OrderStatus status) { this.status = status; }
 
@@ -98,7 +128,10 @@ public class Order {
     public void setShippingAddress(String shippingAddress) { this.shippingAddress = shippingAddress; }
 
     public List<OrderItem> getItems() { return items; }
-    public void setItems(List<OrderItem> items) { this.items = items; }
+    public void setItems(List<OrderItem> items) { this.items = items != null ? new ArrayList<>(items) : new ArrayList<>(); }
+
+    public List<OrderWarehouseAllocation> getWarehouseAllocations() { return warehouseAllocations; }
+    public void setWarehouseAllocations(List<OrderWarehouseAllocation> warehouseAllocations) { this.warehouseAllocations = warehouseAllocations != null ? new ArrayList<>(warehouseAllocations) : new ArrayList<>(); }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
@@ -113,6 +146,9 @@ public class Order {
         private User customer;
         private VendorProfile vendorProfile;
         private Double totalAmount;
+        private Double subtotalAmount;
+        private Double discountAmount = 0.0;
+        private String couponCode;
         private OrderStatus status = OrderStatus.CONFIRMED;
         private String shippingAddress;
         private List<OrderItem> items = new ArrayList<>();
@@ -123,13 +159,16 @@ public class Order {
         public OrderBuilder customer(User customer) { this.customer = customer; return this; }
         public OrderBuilder vendorProfile(VendorProfile vendorProfile) { this.vendorProfile = vendorProfile; return this; }
         public OrderBuilder totalAmount(Double totalAmount) { this.totalAmount = totalAmount; return this; }
+        public OrderBuilder subtotalAmount(Double subtotalAmount) { this.subtotalAmount = subtotalAmount; return this; }
+        public OrderBuilder discountAmount(Double discountAmount) { this.discountAmount = discountAmount; return this; }
+        public OrderBuilder couponCode(String couponCode) { this.couponCode = couponCode; return this; }
         public OrderBuilder status(OrderStatus status) { this.status = status; return this; }
         public OrderBuilder shippingAddress(String shippingAddress) { this.shippingAddress = shippingAddress; return this; }
         public OrderBuilder items(List<OrderItem> items) { this.items = items; return this; }
         public OrderBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
 
         public Order build() {
-            return new Order(id, orderNumber, customer, vendorProfile, totalAmount, status, shippingAddress, items, createdAt);
+            return new Order(id, orderNumber, customer, vendorProfile, totalAmount, subtotalAmount, discountAmount, couponCode, status, shippingAddress, items, createdAt);
         }
     }
 }
