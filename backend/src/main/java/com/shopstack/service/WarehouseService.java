@@ -20,6 +20,9 @@ public class WarehouseService {
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private final ReturnRequestRepository returnRequestRepository;
+    private final UserRepository userRepository;
+    private final PaymentRepository paymentRepository;
 
     public WarehouseService(WarehouseRepository warehouseRepository,
                             WarehouseInventoryRepository inventoryRepository,
@@ -27,7 +30,10 @@ public class WarehouseService {
                             StockMovementRepository stockMovementRepository,
                             ProductRepository productRepository,
                             OrderRepository orderRepository,
-                            OrderItemRepository orderItemRepository) {
+                            OrderItemRepository orderItemRepository,
+                            ReturnRequestRepository returnRequestRepository,
+                            UserRepository userRepository,
+                            PaymentRepository paymentRepository) {
         this.warehouseRepository = warehouseRepository;
         this.inventoryRepository = inventoryRepository;
         this.allocationRepository = allocationRepository;
@@ -35,6 +41,9 @@ public class WarehouseService {
         this.productRepository = productRepository;
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
+        this.returnRequestRepository = returnRequestRepository;
+        this.userRepository = userRepository;
+        this.paymentRepository = paymentRepository;
     }
 
     // ==========================================
@@ -681,6 +690,17 @@ public class WarehouseService {
         dto.setReadyForShipmentCount(allocationRepository.countByStage(StockMovementStage.READY_FOR_SHIPMENT));
         dto.setShippedCount(allocationRepository.countByStage(StockMovementStage.SHIPPED));
 
+        long totalDamaged = allInventories.stream().mapToLong(WarehouseInventory::getDamagedStock).sum();
+        dto.setTotalDamagedStock(totalDamaged);
+
+        long pendingReturns = returnRequestRepository.findByStatusOrderByCreatedAtDesc("PENDING_REVIEW").size();
+        long receivedReturns = returnRequestRepository.findByStatusOrderByCreatedAtDesc("RECEIVED_AT_WAREHOUSE").size();
+        dto.setPendingReturnsCount(pendingReturns + receivedReturns);
+
+        long completedReturns = returnRequestRepository.findByStatusOrderByCreatedAtDesc("QC_PASSED_RESTOCKED").size()
+                + returnRequestRepository.findByStatusOrderByCreatedAtDesc("QC_FAILED_DAMAGED").size();
+        dto.setCompletedReturnsCount(completedReturns);
+
         long lowStock = allInventories.stream().filter(i -> i.getAvailableStock() <= i.getMinThreshold()).count();
         dto.setLowStockItemCount(lowStock);
 
@@ -757,6 +777,7 @@ public class WarehouseService {
         dto.setTotalStock(inv.getTotalStock());
         dto.setAllocatedStock(inv.getAllocatedStock());
         dto.setAvailableStock(inv.getAvailableStock());
+        dto.setDamagedStock(inv.getDamagedStock());
         dto.setAisleLocation(inv.getAisleLocation());
         dto.setMinThreshold(inv.getMinThreshold());
         dto.setIsLowStock(inv.getAvailableStock() <= (inv.getMinThreshold() != null ? inv.getMinThreshold() : 10));
@@ -834,4 +855,387 @@ public class WarehouseService {
         dto.setCreatedAt(m.getCreatedAt());
         return dto;
     }
+
+    // ==========================================
+    // 8. Customer Returns & QC Inspection Workflow
+    // ==========================================
+
+    @Transactional
+    public ReturnResponseDto requestReturn(Long customerId, ReturnRequestDto request) {
+        User customer = userRepository.findById(customerId)
+                .orElseThrow(() -> new RuntimeException("Customer not found with ID: " + customerId));
+
+        Order order = orderRepository.findById(request.getOrderId())
+                .orElseThrow(() -> new RuntimeException("Order not found with ID: " + request.getOrderId()));
+
+        if (!order.getCustomer().getId().equals(customerId)) {
+            throw new IllegalArgumentException("You can only request returns for your own orders.");
+        }
+
+        List<OrderWarehouseAllocation> allocs = allocationRepository.findByOrderId(order.getId());
+        OrderWarehouseAllocation targetAlloc = allocs.isEmpty() ? null : allocs.get(0);
+        OrderItem targetItem = (targetAlloc != null) ? targetAlloc.getOrderItem() : (order.getItems().isEmpty() ? null : order.getItems().get(0));
+        Warehouse targetWarehouse = (targetAlloc != null) ? targetAlloc.getWarehouse() : warehouseRepository.findAll().stream().findFirst().orElse(null);
+
+        order.setStatus(OrderStatus.RETURN_REQUESTED);
+        orderRepository.save(order);
+
+        if (targetAlloc != null) {
+            targetAlloc.setStage(StockMovementStage.RETURN_REQUESTED);
+            allocationRepository.save(targetAlloc);
+        }
+
+        ReturnRequest returnReq = ReturnRequest.builder()
+                .order(order)
+                .orderItem(targetItem)
+                .customer(customer)
+                .warehouse(targetWarehouse)
+                .reason(request.getReason())
+                .returnReasonType(request.getReturnReasonType() != null ? request.getReturnReasonType() : "DEFECTIVE")
+                .customerComments(request.getCustomerComments())
+                .status("PENDING_REVIEW")
+                .refundAmount(order.getTotalAmount())
+                .build();
+
+        ReturnRequest saved = returnRequestRepository.save(returnReq);
+        return mapToReturnResponseDTO(saved);
+    }
+
+    @Transactional
+    public ReturnResponseDto reviewReturn(Long returnId, ReturnReviewDto reviewDto, Long adminId) {
+        ReturnRequest returnReq = returnRequestRepository.findById(returnId)
+                .orElseThrow(() -> new RuntimeException("Return request not found with ID: " + returnId));
+
+        Order order = returnReq.getOrder();
+        List<OrderWarehouseAllocation> allocs = allocationRepository.findByOrderId(order.getId());
+        OrderWarehouseAllocation targetAlloc = allocs.isEmpty() ? null : allocs.get(0);
+
+        if (Boolean.TRUE.equals(reviewDto.getApproved())) {
+            returnReq.setStatus("APPROVED");
+            returnReq.setAdminNotes(reviewDto.getAdminNotes() != null ? reviewDto.getAdminNotes() : "Return approved by Admin. Route to assigned fulfillment hub.");
+
+            if (reviewDto.getTargetWarehouseId() != null) {
+                Warehouse targetWh = warehouseRepository.findById(reviewDto.getTargetWarehouseId()).orElse(null);
+                if (targetWh != null) returnReq.setWarehouse(targetWh);
+            }
+
+            order.setStatus(OrderStatus.RETURN_APPROVED);
+            orderRepository.save(order);
+
+            if (targetAlloc != null) {
+                targetAlloc.setStage(StockMovementStage.RETURN_APPROVED);
+                allocationRepository.save(targetAlloc);
+            }
+        } else {
+            returnReq.setStatus("REJECTED");
+            returnReq.setAdminNotes(reviewDto.getAdminNotes() != null ? reviewDto.getAdminNotes() : "Return request rejected by Admin.");
+
+            order.setStatus(OrderStatus.RETURN_REJECTED);
+            orderRepository.save(order);
+
+            if (targetAlloc != null) {
+                targetAlloc.setStage(StockMovementStage.RETURN_REJECTED);
+                allocationRepository.save(targetAlloc);
+            }
+        }
+
+        ReturnRequest saved = returnRequestRepository.save(returnReq);
+        return mapToReturnResponseDTO(saved);
+    }
+
+    @Transactional
+    public ReturnResponseDto receiveReturnAtWarehouse(Long returnId, String staffName) {
+        ReturnRequest returnReq = returnRequestRepository.findById(returnId)
+                .orElseThrow(() -> new RuntimeException("Return request not found with ID: " + returnId));
+
+        returnReq.setStatus("RECEIVED_AT_WAREHOUSE");
+        returnReq.setInspectedBy(staffName != null ? staffName : "Warehouse QC Specialist");
+
+        Order order = returnReq.getOrder();
+        order.setStatus(OrderStatus.RETURNED);
+        orderRepository.save(order);
+
+        List<OrderWarehouseAllocation> allocs = allocationRepository.findByOrderId(order.getId());
+        if (!allocs.isEmpty()) {
+            OrderWarehouseAllocation alloc = allocs.get(0);
+            alloc.setStage(StockMovementStage.RETURN_RECEIVED_AT_WAREHOUSE);
+            allocationRepository.save(alloc);
+        }
+
+        ReturnRequest saved = returnRequestRepository.save(returnReq);
+        return mapToReturnResponseDTO(saved);
+    }
+
+    @Transactional
+    public ReturnResponseDto performQcInspection(Long returnId, QcInspectionDto qcDto, Long staffId) {
+        ReturnRequest returnReq = returnRequestRepository.findById(returnId)
+                .orElseThrow(() -> new RuntimeException("Return request not found with ID: " + returnId));
+
+        Warehouse warehouse = returnReq.getWarehouse();
+        if (warehouse == null) {
+            warehouse = warehouseRepository.findAll().stream().findFirst().orElseThrow(() -> new RuntimeException("No warehouse found."));
+            returnReq.setWarehouse(warehouse);
+        }
+
+        Product product = (returnReq.getOrderItem() != null) ? returnReq.getOrderItem().getProduct() : null;
+        if (product == null && returnReq.getOrder() != null && !returnReq.getOrder().getItems().isEmpty()) {
+            product = returnReq.getOrder().getItems().get(0).getProduct();
+        }
+
+        int quantity = (returnReq.getOrderItem() != null && returnReq.getOrderItem().getQuantity() != null)
+                ? returnReq.getOrderItem().getQuantity() : 1;
+
+        WarehouseInventory inv = (product != null)
+                ? inventoryRepository.findByWarehouseIdAndProductId(warehouse.getId(), product.getId()).orElse(null)
+                : null;
+
+        String inspector = (qcDto.getInspectedBy() != null && !qcDto.getInspectedBy().isBlank())
+                ? qcDto.getInspectedBy() : "QC Specialist #" + (staffId != null ? staffId : 101);
+
+        returnReq.setInspectedBy(inspector);
+        returnReq.setInspectedAt(LocalDateTime.now());
+        returnReq.setQcNotes(qcDto.getQcNotes() != null ? qcDto.getQcNotes() : "QC Inspection completed");
+
+        Order order = returnReq.getOrder();
+        List<OrderWarehouseAllocation> allocs = allocationRepository.findByOrderId(order.getId());
+        OrderWarehouseAllocation targetAlloc = allocs.isEmpty() ? null : allocs.get(0);
+
+        boolean isPassed = "PASS".equalsIgnoreCase(qcDto.getQcDecision()) || "RESTOCK".equalsIgnoreCase(qcDto.getQcDecision());
+
+        if (isPassed) {
+            // ACCEPTED & RESTOCKED
+            returnReq.setStatus("QC_PASSED_RESTOCKED");
+            returnReq.setQcDecision("PASS");
+
+            if (inv != null) {
+                inv.setTotalStock(inv.getTotalStock() + quantity);
+                inv.setAvailableStock(inv.getAvailableStock() + quantity);
+                inventoryRepository.save(inv);
+            }
+
+            if (product != null) {
+                int currentProdStock = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+                product.setStockQuantity(currentProdStock + quantity);
+                productRepository.save(product);
+            }
+
+            if (targetAlloc != null) {
+                targetAlloc.setStage(StockMovementStage.QC_ACCEPTED_RESTOCKED);
+                allocationRepository.save(targetAlloc);
+            }
+
+            order.setStatus(OrderStatus.REFUNDED);
+            order.setPaymentStatus(PaymentStatus.REFUNDED);
+            orderRepository.save(order);
+
+            // Synchronize Payment entity
+            try {
+                paymentRepository.findAll().stream()
+                        .filter(p -> p.getOrderIdsJson() != null && p.getOrderIdsJson().contains(String.valueOf(order.getId())))
+                        .forEach(p -> {
+                            p.setStatus(PaymentStatus.REFUNDED);
+                            paymentRepository.save(p);
+                        });
+            } catch (Exception ignored) {}
+
+            // Log Stock Movement
+            if (product != null) {
+                StockMovement movement = StockMovement.builder()
+                        .warehouse(warehouse)
+                        .product(product)
+                        .order(order)
+                        .movementType(StockMovementType.QC_RESTOCKED)
+                        .stage(StockMovementStage.QC_ACCEPTED_RESTOCKED)
+                        .quantity(quantity)
+                        .previousAvailableStock(inv != null ? inv.getAvailableStock() - quantity : 0)
+                        .newAvailableStock(inv != null ? inv.getAvailableStock() : quantity)
+                        .previousAllocatedStock(inv != null ? inv.getAllocatedStock() : 0)
+                        .newAllocatedStock(inv != null ? inv.getAllocatedStock() : 0)
+                        .previousTotalStock(inv != null ? inv.getTotalStock() - quantity : 0)
+                        .newTotalStock(inv != null ? inv.getTotalStock() : quantity)
+                        .referenceNumber("QC-PASS-" + returnReq.getId())
+                        .notes("QC Passed: Item verified intact, restocked to " + (inv != null ? inv.getAisleLocation() : "shelf") + ". Refund initiated.")
+                        .performedBy(inspector)
+                        .build();
+                stockMovementRepository.save(movement);
+            }
+        } else {
+            // FAILED & MOVED TO QUARANTINE / DAMAGED STOCK
+            returnReq.setStatus("QC_FAILED_DAMAGED");
+            returnReq.setQcDecision("FAIL");
+
+            if (inv != null) {
+                inv.moveToDamagedStock(quantity);
+                inventoryRepository.save(inv);
+            }
+
+            if (targetAlloc != null) {
+                targetAlloc.setStage(StockMovementStage.QC_REJECTED_DAMAGED);
+                allocationRepository.save(targetAlloc);
+            }
+
+            order.setStatus(OrderStatus.REFUNDED);
+            order.setPaymentStatus(PaymentStatus.REFUNDED);
+            orderRepository.save(order);
+
+            // Synchronize Payment entity
+            try {
+                paymentRepository.findAll().stream()
+                        .filter(p -> p.getOrderIdsJson() != null && p.getOrderIdsJson().contains(String.valueOf(order.getId())))
+                        .forEach(p -> {
+                            p.setStatus(PaymentStatus.REFUNDED);
+                            paymentRepository.save(p);
+                        });
+            } catch (Exception ignored) {}
+
+            // Log Stock Movement
+            if (product != null) {
+                StockMovement movement = StockMovement.builder()
+                        .warehouse(warehouse)
+                        .product(product)
+                        .order(order)
+                        .movementType(StockMovementType.QC_QUARANTINED)
+                        .stage(StockMovementStage.QC_REJECTED_DAMAGED)
+                        .quantity(quantity)
+                        .previousAvailableStock(inv != null ? inv.getAvailableStock() : 0)
+                        .newAvailableStock(inv != null ? inv.getAvailableStock() : 0)
+                        .previousAllocatedStock(inv != null ? inv.getAllocatedStock() : 0)
+                        .newAllocatedStock(inv != null ? inv.getAllocatedStock() : 0)
+                        .previousTotalStock(inv != null ? inv.getTotalStock() : 0)
+                        .newTotalStock(inv != null ? inv.getTotalStock() : 0)
+                        .referenceNumber("QC-FAIL-" + returnReq.getId())
+                        .notes("QC Failed: Item damaged/defective. Moved " + quantity + " units to Quarantine Damaged Stock. Refund processed.")
+                        .performedBy(inspector)
+                        .build();
+                stockMovementRepository.save(movement);
+            }
+        }
+
+        ReturnRequest saved = returnRequestRepository.save(returnReq);
+        return mapToReturnResponseDTO(saved);
+    }
+
+    @Transactional
+    public WarehouseInventoryDTO transferVendorStockToWarehouse(VendorStockTransferDto dto, Long vendorOrAdminId) {
+        Warehouse warehouse = warehouseRepository.findById(dto.getWarehouseId())
+                .orElseThrow(() -> new RuntimeException("Warehouse not found with ID: " + dto.getWarehouseId()));
+
+        Product product = productRepository.findById(dto.getProductId())
+                .orElseThrow(() -> new RuntimeException("Product not found with ID: " + dto.getProductId()));
+
+        WarehouseInventory inventory = inventoryRepository.findByWarehouseIdAndProductId(warehouse.getId(), product.getId())
+                .orElseGet(() -> WarehouseInventory.builder()
+                        .warehouse(warehouse)
+                        .product(product)
+                        .totalStock(0)
+                        .allocatedStock(0)
+                        .availableStock(0)
+                        .damagedStock(0)
+                        .aisleLocation(dto.getAisleLocation() != null ? dto.getAisleLocation() : "Aisle 01, Inbound Shelf")
+                        .minThreshold(5)
+                        .build());
+
+        int prevAvailable = inventory.getAvailableStock();
+        int prevTotal = inventory.getTotalStock();
+
+        inventory.setTotalStock(prevTotal + dto.getQuantity());
+        inventory.setAvailableStock(prevAvailable + dto.getQuantity());
+        if (dto.getAisleLocation() != null && !dto.getAisleLocation().isBlank()) {
+            inventory.setAisleLocation(dto.getAisleLocation());
+        }
+        inventory.setLastRestockedAt(LocalDateTime.now());
+        WarehouseInventory savedInv = inventoryRepository.save(inventory);
+
+        // Update product stock if applicable
+        int curProdStock = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+        product.setStockQuantity(Math.max(curProdStock, savedInv.getAvailableStock()));
+        productRepository.save(product);
+
+        // Log Stock Movement
+        String sender = dto.getTransferredBy() != null ? dto.getTransferredBy() : "Vendor Dispatch";
+        StockMovement movement = StockMovement.builder()
+                .warehouse(warehouse)
+                .product(product)
+                .movementType(StockMovementType.VENDOR_STOCK_TRANSFER)
+                .stage(StockMovementStage.AVAILABLE)
+                .quantity(dto.getQuantity())
+                .previousAvailableStock(prevAvailable)
+                .newAvailableStock(savedInv.getAvailableStock())
+                .previousAllocatedStock(savedInv.getAllocatedStock())
+                .newAllocatedStock(savedInv.getAllocatedStock())
+                .previousTotalStock(prevTotal)
+                .newTotalStock(savedInv.getTotalStock())
+                .referenceNumber("VENDOR-INB-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase())
+                .notes(dto.getNotes() != null ? dto.getNotes() : "Vendor stock assigned and received at " + warehouse.getName())
+                .performedBy(sender)
+                .build();
+        stockMovementRepository.save(movement);
+
+        return mapToInventoryDTO(savedInv);
+    }
+
+    public List<ReturnResponseDto> getAllReturns(Long warehouseId, String status) {
+        List<ReturnRequest> list;
+        if (warehouseId != null && status != null && !status.equalsIgnoreCase("ALL")) {
+            list = returnRequestRepository.findByWarehouseIdOrderByCreatedAtDesc(warehouseId).stream()
+                    .filter(r -> r.getStatus().equalsIgnoreCase(status))
+                    .collect(Collectors.toList());
+        } else if (warehouseId != null) {
+            list = returnRequestRepository.findByWarehouseIdOrderByCreatedAtDesc(warehouseId);
+        } else if (status != null && !status.equalsIgnoreCase("ALL")) {
+            list = returnRequestRepository.findByStatusOrderByCreatedAtDesc(status);
+        } else {
+            list = returnRequestRepository.findAllByOrderByCreatedAtDesc();
+        }
+        return list.stream().map(this::mapToReturnResponseDTO).collect(Collectors.toList());
+    }
+
+    public List<ReturnResponseDto> getCustomerReturns(Long customerId) {
+        return returnRequestRepository.findByCustomerIdOrderByCreatedAtDesc(customerId).stream()
+                .map(this::mapToReturnResponseDTO)
+                .collect(Collectors.toList());
+    }
+
+    private ReturnResponseDto mapToReturnResponseDTO(ReturnRequest r) {
+        ReturnResponseDto dto = new ReturnResponseDto();
+        dto.setId(r.getId());
+        dto.setOrderId(r.getOrder().getId());
+        dto.setOrderNumber(r.getOrder().getOrderNumber());
+        if (r.getOrderItem() != null) {
+            dto.setOrderItemId(r.getOrderItem().getId());
+            dto.setProductId(r.getOrderItem().getProduct().getId());
+            dto.setProductTitle(r.getOrderItem().getProduct().getTitle());
+            dto.setProductImageUrl(r.getOrderItem().getProduct().getImageUrl());
+            dto.setQuantity(r.getOrderItem().getQuantity());
+        } else if (!r.getOrder().getItems().isEmpty()) {
+            OrderItem first = r.getOrder().getItems().get(0);
+            dto.setOrderItemId(first.getId());
+            dto.setProductId(first.getProduct().getId());
+            dto.setProductTitle(first.getProduct().getTitle());
+            dto.setProductImageUrl(first.getProduct().getImageUrl());
+            dto.setQuantity(first.getQuantity());
+        }
+        dto.setCustomerId(r.getCustomer().getId());
+        dto.setCustomerName(r.getCustomer().getFullName());
+        dto.setCustomerEmail(r.getCustomer().getEmail());
+        if (r.getWarehouse() != null) {
+            dto.setWarehouseId(r.getWarehouse().getId());
+            dto.setWarehouseName(r.getWarehouse().getName());
+            dto.setWarehouseCode(r.getWarehouse().getCode());
+        }
+        dto.setReason(r.getReason());
+        dto.setReturnReasonType(r.getReturnReasonType());
+        dto.setCustomerComments(r.getCustomerComments());
+        dto.setStatus(r.getStatus());
+        dto.setRefundAmount(r.getRefundAmount() != null ? r.getRefundAmount() : r.getOrder().getTotalAmount());
+        dto.setAdminNotes(r.getAdminNotes());
+        dto.setQcNotes(r.getQcNotes());
+        dto.setQcDecision(r.getQcDecision());
+        dto.setInspectedBy(r.getInspectedBy());
+        dto.setInspectedAt(r.getInspectedAt());
+        dto.setCreatedAt(r.getCreatedAt());
+        dto.setUpdatedAt(r.getUpdatedAt());
+        return dto;
+    }
 }
+

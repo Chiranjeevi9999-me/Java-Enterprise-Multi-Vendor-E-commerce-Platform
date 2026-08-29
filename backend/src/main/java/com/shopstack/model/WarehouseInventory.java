@@ -30,6 +30,9 @@ public class WarehouseInventory {
     @Column(nullable = false)
     private Integer availableStock = 0; // totalStock - allocatedStock
 
+    @Column(nullable = false)
+    private Integer damagedStock = 0; // Quarantine / Damaged units from QC returns
+
     private String aisleLocation; // e.g. "Aisle 4, Bay B, Shelf 12"
 
     private Integer minThreshold = 10; // Low stock alert trigger level
@@ -41,14 +44,15 @@ public class WarehouseInventory {
     public WarehouseInventory() {}
 
     public WarehouseInventory(Long id, Warehouse warehouse, Product product, Integer totalStock,
-                              Integer allocatedStock, Integer availableStock, String aisleLocation,
-                              Integer minThreshold, LocalDateTime lastRestockedAt, LocalDateTime updatedAt) {
+                              Integer allocatedStock, Integer availableStock, Integer damagedStock,
+                              String aisleLocation, Integer minThreshold, LocalDateTime lastRestockedAt, LocalDateTime updatedAt) {
         this.id = id;
         this.warehouse = warehouse;
         this.product = product;
         this.totalStock = totalStock != null ? totalStock : 0;
         this.allocatedStock = allocatedStock != null ? allocatedStock : 0;
         this.availableStock = availableStock != null ? availableStock : (this.totalStock - this.allocatedStock);
+        this.damagedStock = damagedStock != null ? damagedStock : 0;
         this.aisleLocation = aisleLocation;
         this.minThreshold = minThreshold != null ? minThreshold : 10;
         this.lastRestockedAt = lastRestockedAt;
@@ -124,6 +128,15 @@ public class WarehouseInventory {
     public Integer getAvailableStock() { return availableStock; }
     public void setAvailableStock(Integer availableStock) { this.availableStock = availableStock; }
 
+    public Integer getDamagedStock() { return damagedStock != null ? damagedStock : 0; }
+    public void setDamagedStock(Integer damagedStock) { this.damagedStock = damagedStock != null ? damagedStock : 0; }
+
+    public void moveToDamagedStock(int quantity) {
+        if (this.damagedStock == null) this.damagedStock = 0;
+        this.damagedStock += quantity;
+        this.updatedAt = LocalDateTime.now();
+    }
+
     public String getAisleLocation() { return aisleLocation; }
     public void setAisleLocation(String aisleLocation) { this.aisleLocation = aisleLocation; }
 
@@ -147,6 +160,7 @@ public class WarehouseInventory {
         private Integer totalStock = 0;
         private Integer allocatedStock = 0;
         private Integer availableStock = 0;
+        private Integer damagedStock = 0;
         private String aisleLocation;
         private Integer minThreshold = 10;
         private LocalDateTime lastRestockedAt;
@@ -158,13 +172,14 @@ public class WarehouseInventory {
         public WarehouseInventoryBuilder totalStock(Integer totalStock) { this.totalStock = totalStock; return this; }
         public WarehouseInventoryBuilder allocatedStock(Integer allocatedStock) { this.allocatedStock = allocatedStock; return this; }
         public WarehouseInventoryBuilder availableStock(Integer availableStock) { this.availableStock = availableStock; return this; }
+        public WarehouseInventoryBuilder damagedStock(Integer damagedStock) { this.damagedStock = damagedStock; return this; }
         public WarehouseInventoryBuilder aisleLocation(String aisleLocation) { this.aisleLocation = aisleLocation; return this; }
         public WarehouseInventoryBuilder minThreshold(Integer minThreshold) { this.minThreshold = minThreshold; return this; }
         public WarehouseInventoryBuilder lastRestockedAt(LocalDateTime lastRestockedAt) { this.lastRestockedAt = lastRestockedAt; return this; }
         public WarehouseInventoryBuilder updatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
 
         public WarehouseInventory build() {
-            return new WarehouseInventory(id, warehouse, product, totalStock, allocatedStock, availableStock, aisleLocation, minThreshold, lastRestockedAt, updatedAt);
+            return new WarehouseInventory(id, warehouse, product, totalStock, allocatedStock, availableStock, damagedStock, aisleLocation, minThreshold, lastRestockedAt, updatedAt);
         }
     }
 }

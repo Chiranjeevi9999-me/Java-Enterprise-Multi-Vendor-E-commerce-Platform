@@ -59,6 +59,10 @@ public class AuthService {
             }
         }
 
+        Long assignedWarehouseId = user.getAssignedWarehouse() != null ? user.getAssignedWarehouse().getId() : null;
+        String assignedWarehouseName = user.getAssignedWarehouse() != null ? user.getAssignedWarehouse().getName() : null;
+        String assignedWarehouseCode = user.getAssignedWarehouse() != null ? user.getAssignedWarehouse().getCode() : null;
+
         return AuthResponse.builder()
                 .accessToken(jwt)
                 .id(user.getId())
@@ -67,6 +71,9 @@ public class AuthService {
                 .role(user.getRole())
                 .vendorProfileId(vendorId)
                 .storeName(storeName)
+                .assignedWarehouseId(assignedWarehouseId)
+                .assignedWarehouseName(assignedWarehouseName)
+                .assignedWarehouseCode(assignedWarehouseCode)
                 .build();
     }
 

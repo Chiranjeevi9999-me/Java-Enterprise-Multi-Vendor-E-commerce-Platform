@@ -155,6 +155,12 @@ const Navbar = ({ searchQuery, setSearchQuery, selectedCategory, setSelectedCate
               </Link>
             )}
 
+            {(user?.role === 'WAREHOUSE_STAFF' || isAdmin) && (
+              <Link to="/warehouse-staff" className="btn btn-secondary btn-sm" style={{ borderColor: 'rgba(56, 189, 248, 0.4)', color: '#38bdf8' }}>
+                <PackageCheck size={15} /> Staff Portal
+              </Link>
+            )}
+
             {isAdmin && (
               <Link to="/admin" className="btn btn-secondary btn-sm" style={{ borderColor: 'rgba(236, 72, 153, 0.4)', color: '#f472b6' }}>
                 <ShieldCheck size={15} /> Admin Panel

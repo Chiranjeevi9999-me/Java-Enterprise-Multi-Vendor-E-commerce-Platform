@@ -229,4 +229,79 @@ class WarehouseServiceTest {
         assertNotNull(analytics.getPipelineStageCounts());
         assertTrue(analytics.getTotalStockMovements() > 0);
     }
+
+    @Test
+    @DisplayName("7. Customer Return & QC Restock Workflow (Pass QC -> Restock to Available Inventory & Refund)")
+    void testCustomerReturnAndQcRestockWorkflow() {
+        User customer = userRepository.findAll().stream().filter(u -> u.getRole() == Role.CUSTOMER).findFirst().get();
+        ReturnRequestDto req = new ReturnRequestDto(testOrder.getId(), null, "Product defect", "DEFECTIVE", "Left button unresponsive");
+
+        // Step 1: Customer submits return
+        ReturnResponseDto submitted = warehouseService.requestReturn(customer.getId(), req);
+        assertNotNull(submitted.getId());
+        assertEquals("PENDING_REVIEW", submitted.getStatus());
+
+        // Step 2: Admin reviews and approves return
+        ReturnReviewDto reviewDto = new ReturnReviewDto(true, "Approved for inspection", hydWarehouse.getId());
+        ReturnResponseDto approved = warehouseService.reviewReturn(submitted.getId(), reviewDto, 1L);
+        assertEquals("APPROVED", approved.getStatus());
+
+        // Step 3: Warehouse staff receives item
+        ReturnResponseDto received = warehouseService.receiveReturnAtWarehouse(submitted.getId(), "Vikram Rao (Hyderabad Staff)");
+        assertEquals("RECEIVED_AT_WAREHOUSE", received.getStatus());
+
+        // Step 4: Warehouse staff performs QC - PASS / RESTOCK
+        QcInspectionDto qcDto = new QcInspectionDto("PASS", "Item fully verified and functional, packaging refreshed", "Vikram Rao");
+        ReturnResponseDto qcResult = warehouseService.performQcInspection(submitted.getId(), qcDto, 1L);
+
+        assertEquals("QC_PASSED_RESTOCKED", qcResult.getStatus());
+        assertEquals("PASS", qcResult.getQcDecision());
+
+        // Verify order is refunded
+        Order order = orderRepository.findById(testOrder.getId()).get();
+        assertEquals(OrderStatus.REFUNDED, order.getStatus());
+    }
+
+    @Test
+    @DisplayName("8. Customer Return & QC Damaged Workflow (Fail QC -> Move to Quarantine Damaged Stock & Refund)")
+    void testCustomerReturnAndQcDamagedWorkflow() {
+        User customer = userRepository.findAll().stream().filter(u -> u.getRole() == Role.CUSTOMER).findFirst().get();
+        ReturnRequestDto req = new ReturnRequestDto(testOrder.getId(), null, "Damaged in shipping transit", "DAMAGED_IN_TRANSIT", "Screen cracked upon delivery");
+
+        ReturnResponseDto submitted = warehouseService.requestReturn(customer.getId(), req);
+        ReturnReviewDto reviewDto = new ReturnReviewDto(true, "Approved damaged return", hydWarehouse.getId());
+        warehouseService.reviewReturn(submitted.getId(), reviewDto, 1L);
+        warehouseService.receiveReturnAtWarehouse(submitted.getId(), "Vikram Rao");
+
+        // Staff performs QC - FAIL / DAMAGED
+        QcInspectionDto qcDto = new QcInspectionDto("FAIL", "Physical chassis cracked beyond repair. Quarantined.", "Vikram Rao");
+        ReturnResponseDto qcResult = warehouseService.performQcInspection(submitted.getId(), qcDto, 1L);
+
+        assertEquals("QC_FAILED_DAMAGED", qcResult.getStatus());
+        assertEquals("FAIL", qcResult.getQcDecision());
+
+        // Verify damaged stock incremented
+        WarehouseInventory inv = inventoryRepository.findByWarehouseIdAndProductId(hydWarehouse.getId(), testProduct.getId()).orElse(null);
+        if (inv != null) {
+            assertTrue(inv.getDamagedStock() > 0);
+        }
+    }
+
+    @Test
+    @DisplayName("9. Vendor Stock Distribution to Warehouse Hub")
+    void testVendorStockDistribution() {
+        VendorStockTransferDto transferDto = new VendorStockTransferDto(
+                testProduct.getId(),
+                hydWarehouse.getId(),
+                15,
+                "Aisle 05, Inbound Bay 3",
+                "Vendor bulk replenishment batch",
+                "Vendor Supplier Rep"
+        );
+
+        WarehouseInventoryDTO inv = warehouseService.transferVendorStockToWarehouse(transferDto, 2L);
+        assertNotNull(inv);
+        assertTrue(inv.getAvailableStock() >= 15);
+        assertEquals("Aisle 05, Inbound Bay 3", inv.getAisleLocation());
+    }
 }

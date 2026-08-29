@@ -124,7 +124,7 @@ public class WarehouseController {
     // ==========================================
 
     @PostMapping("/allocations/{id}/pick")
-    @PreAuthorize("hasAnyRole('ADMIN', 'VENDOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'WAREHOUSE_STAFF', 'VENDOR')")
     public ResponseEntity<OrderWarehouseAllocationDTO> pickItem(
             @PathVariable Long id,
             @RequestBody(required = false) PickRequest request) {
@@ -133,7 +133,7 @@ public class WarehouseController {
     }
 
     @PostMapping("/allocations/{id}/pack")
-    @PreAuthorize("hasAnyRole('ADMIN', 'VENDOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'WAREHOUSE_STAFF', 'VENDOR')")
     public ResponseEntity<OrderWarehouseAllocationDTO> packItem(
             @PathVariable Long id,
             @RequestBody(required = false) PackRequest request) {
@@ -142,7 +142,7 @@ public class WarehouseController {
     }
 
     @PostMapping("/allocations/{id}/prepare-shipment")
-    @PreAuthorize("hasAnyRole('ADMIN', 'VENDOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'WAREHOUSE_STAFF', 'VENDOR')")
     public ResponseEntity<OrderWarehouseAllocationDTO> prepareShipment(
             @PathVariable Long id,
             @RequestBody(required = false) ShipmentPreparationRequest request) {
@@ -151,13 +151,78 @@ public class WarehouseController {
     }
 
     @PostMapping("/allocations/{id}/dispatch")
-    @PreAuthorize("hasAnyRole('ADMIN', 'VENDOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'WAREHOUSE_STAFF', 'VENDOR')")
     public ResponseEntity<OrderWarehouseAllocationDTO> dispatchItem(@PathVariable Long id) {
         return ResponseEntity.ok(warehouseService.dispatchShipment(id));
     }
 
     // ==========================================
-    // 5. Stock Movement Audit Trail & Analytics
+    // 5. Customer Returns & QC Inspection Endpoints
+    // ==========================================
+
+    @PostMapping("/returns/request")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ReturnResponseDto> requestReturn(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.shopstack.security.UserPrincipal principal,
+            @Valid @RequestBody ReturnRequestDto request) {
+        return ResponseEntity.ok(warehouseService.requestReturn(principal.getId(), request));
+    }
+
+    @GetMapping("/returns")
+    @PreAuthorize("hasAnyRole('ADMIN', 'WAREHOUSE_STAFF')")
+    public ResponseEntity<List<ReturnResponseDto>> getAllReturns(
+            @RequestParam(required = false) Long warehouseId,
+            @RequestParam(required = false) String status) {
+        return ResponseEntity.ok(warehouseService.getAllReturns(warehouseId, status));
+    }
+
+    @GetMapping("/returns/my-returns")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<ReturnResponseDto>> getMyReturns(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.shopstack.security.UserPrincipal principal) {
+        return ResponseEntity.ok(warehouseService.getCustomerReturns(principal.getId()));
+    }
+
+    @PostMapping("/returns/{id}/review")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ReturnResponseDto> reviewReturn(
+            @PathVariable Long id,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.shopstack.security.UserPrincipal principal,
+            @Valid @RequestBody ReturnReviewDto reviewDto) {
+        return ResponseEntity.ok(warehouseService.reviewReturn(id, reviewDto, principal.getId()));
+    }
+
+    @PostMapping("/returns/{id}/receive")
+    @PreAuthorize("hasAnyRole('ADMIN', 'WAREHOUSE_STAFF')")
+    public ResponseEntity<ReturnResponseDto> receiveReturnAtWarehouse(
+            @PathVariable Long id,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.shopstack.security.UserPrincipal principal) {
+        return ResponseEntity.ok(warehouseService.receiveReturnAtWarehouse(id, principal != null ? principal.getFullName() : "Staff"));
+    }
+
+    @PostMapping("/returns/{id}/qc-inspect")
+    @PreAuthorize("hasAnyRole('ADMIN', 'WAREHOUSE_STAFF')")
+    public ResponseEntity<ReturnResponseDto> performQcInspection(
+            @PathVariable Long id,
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.shopstack.security.UserPrincipal principal,
+            @Valid @RequestBody QcInspectionDto qcDto) {
+        return ResponseEntity.ok(warehouseService.performQcInspection(id, qcDto, principal.getId()));
+    }
+
+    // ==========================================
+    // 6. Vendor Stock Distribution to Warehouses
+    // ==========================================
+
+    @PostMapping("/vendor-stock-transfer")
+    @PreAuthorize("hasAnyRole('ADMIN', 'VENDOR')")
+    public ResponseEntity<WarehouseInventoryDTO> transferVendorStock(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.shopstack.security.UserPrincipal principal,
+            @Valid @RequestBody VendorStockTransferDto dto) {
+        return ResponseEntity.ok(warehouseService.transferVendorStockToWarehouse(dto, principal.getId()));
+    }
+
+    // ==========================================
+    // 7. Stock Movement Audit Trail & Analytics
     // ==========================================
 
     @GetMapping("/stock-movements")

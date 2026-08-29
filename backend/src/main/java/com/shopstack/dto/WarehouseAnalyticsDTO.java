@@ -19,6 +19,9 @@ public class WarehouseAnalyticsDTO {
     private Long shippedCount = 0L;
     private Long lowStockItemCount = 0L;
     private Long totalStockMovements = 0L;
+    private Long totalDamagedStock = 0L;
+    private Long pendingReturnsCount = 0L;
+    private Long completedReturnsCount = 0L;
 
     private Map<String, Long> pipelineStageCounts = new HashMap<>();
     private List<WarehouseDTO> warehouseSummaries;
@@ -64,6 +67,15 @@ public class WarehouseAnalyticsDTO {
 
     public Long getTotalStockMovements() { return totalStockMovements; }
     public void setTotalStockMovements(Long totalStockMovements) { this.totalStockMovements = totalStockMovements; }
+
+    public Long getTotalDamagedStock() { return totalDamagedStock; }
+    public void setTotalDamagedStock(Long totalDamagedStock) { this.totalDamagedStock = totalDamagedStock; }
+
+    public Long getPendingReturnsCount() { return pendingReturnsCount; }
+    public void setPendingReturnsCount(Long pendingReturnsCount) { this.pendingReturnsCount = pendingReturnsCount; }
+
+    public Long getCompletedReturnsCount() { return completedReturnsCount; }
+    public void setCompletedReturnsCount(Long completedReturnsCount) { this.completedReturnsCount = completedReturnsCount; }
 
     public Map<String, Long> getPipelineStageCounts() { return pipelineStageCounts; }
     public void setPipelineStageCounts(Map<String, Long> pipelineStageCounts) { this.pipelineStageCounts = pipelineStageCounts; }

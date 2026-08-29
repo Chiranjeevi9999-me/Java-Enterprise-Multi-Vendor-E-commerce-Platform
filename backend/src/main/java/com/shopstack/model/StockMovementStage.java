@@ -1,5 +1,5 @@
 package com.shopstack.model;
-
+ 
 public enum StockMovementStage {
     AVAILABLE,
     ALLOCATED,
@@ -7,6 +7,14 @@ public enum StockMovementStage {
     PACKED,
     READY_FOR_SHIPMENT,
     SHIPPED,
+    DELIVERED,
     CANCELLED,
-    RESTOCKED
+    RESTOCKED,
+    RETURN_REQUESTED,
+    RETURN_APPROVED,
+    RETURN_REJECTED,
+    RETURN_RECEIVED_AT_WAREHOUSE,
+    IN_QC_INSPECTION,
+    QC_ACCEPTED_RESTOCKED,
+    QC_REJECTED_DAMAGED
 }

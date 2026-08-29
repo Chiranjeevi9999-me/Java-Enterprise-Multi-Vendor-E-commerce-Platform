@@ -11,6 +11,7 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import VendorDashboard from './pages/VendorDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import WarehouseStaffPortal from './pages/WarehouseStaffPortal';
 import MyOrdersPage from './pages/MyOrdersPage';
 import CartPage from './pages/CartPage';
 import CheckoutPage from './pages/CheckoutPage';
@@ -88,6 +89,15 @@ function AppContent() {
             element={
               <ProtectedRoute allowedRoles={['VENDOR', 'ADMIN']}>
                 <VendorDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/warehouse-staff"
+            element={
+              <ProtectedRoute allowedRoles={['WAREHOUSE_STAFF', 'ADMIN']}>
+                <WarehouseStaffPortal />
               </ProtectedRoute>
             }
           />

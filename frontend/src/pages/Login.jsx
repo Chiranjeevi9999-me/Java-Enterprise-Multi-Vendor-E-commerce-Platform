@@ -49,6 +49,8 @@ const Login = () => {
       setTimeout(() => {
         if (res?.role === 'ADMIN') {
           navigate('/admin');
+        } else if (res?.role === 'WAREHOUSE_STAFF') {
+          navigate('/warehouse-staff');
         } else if (res?.role === 'VENDOR') {
           navigate('/vendor');
         } else {
@@ -70,7 +72,7 @@ const Login = () => {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 'calc(100vh - 76px)', padding: '2.5rem 1rem' }}>
-      <div className="glass-panel" style={{ width: '100%', maxWidth: '460px', padding: '2.5rem' }}>
+      <div className="glass-panel" style={{ width: '100%', maxWidth: '480px', padding: '2.5rem' }}>
         
         {/* Brand & Header */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
@@ -169,33 +171,41 @@ const Login = () => {
         {/* Quick Demo Presets */}
         <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-subtle)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '0.75rem', textAlign: 'center' }}>
-            Quick Demo Logins
+            Role-Based Demo Access (Click to Fill)
           </span>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.6rem' }}>
             <button
               type="button"
               onClick={() => handleQuickDemo('admin@shopstack.com', 'admin123')}
               className="btn btn-secondary btn-sm"
-              style={{ fontSize: '0.78rem', padding: '0.45rem' }}
+              style={{ fontSize: '0.78rem', padding: '0.55rem' }}
             >
-              Admin
+              👑 Admin (System)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickDemo('staff@shopstack.com', 'staff123')}
+              className="btn btn-secondary btn-sm"
+              style={{ fontSize: '0.78rem', padding: '0.55rem', borderColor: '#818cf8', color: '#818cf8' }}
+            >
+              📦 Warehouse Staff
             </button>
             <button
               type="button"
               onClick={() => handleQuickDemo('techstore@shopstack.com', 'vendor123')}
               className="btn btn-secondary btn-sm"
-              style={{ fontSize: '0.78rem', padding: '0.45rem' }}
+              style={{ fontSize: '0.78rem', padding: '0.55rem' }}
             >
-              Vendor
+              🏪 Vendor / Merchant
             </button>
             <button
               type="button"
               onClick={() => handleQuickDemo('customer@shopstack.com', 'customer123')}
               className="btn btn-secondary btn-sm"
-              style={{ fontSize: '0.78rem', padding: '0.45rem' }}
+              style={{ fontSize: '0.78rem', padding: '0.55rem' }}
             >
-              Customer
+              🛍️ Customer
             </button>
           </div>
         </div>

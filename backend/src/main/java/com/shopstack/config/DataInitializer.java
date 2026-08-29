@@ -28,6 +28,7 @@ public class DataInitializer implements CommandLineRunner {
     private final WarehouseInventoryRepository warehouseInventoryRepository;
     private final OrderWarehouseAllocationRepository allocationRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final ReturnRequestRepository returnRequestRepository;
     private final PasswordEncoder passwordEncoder;
 
     public DataInitializer(UserRepository userRepository,
@@ -44,6 +45,7 @@ public class DataInitializer implements CommandLineRunner {
                            WarehouseInventoryRepository warehouseInventoryRepository,
                            OrderWarehouseAllocationRepository allocationRepository,
                            StockMovementRepository stockMovementRepository,
+                           ReturnRequestRepository returnRequestRepository,
                            PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.vendorProfileRepository = vendorProfileRepository;
@@ -59,6 +61,7 @@ public class DataInitializer implements CommandLineRunner {
         this.warehouseInventoryRepository = warehouseInventoryRepository;
         this.allocationRepository = allocationRepository;
         this.stockMovementRepository = stockMovementRepository;
+        this.returnRequestRepository = returnRequestRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -644,31 +647,74 @@ public class DataInitializer implements CommandLineRunner {
 
         warehouseRepository.saveAll(List.of(whHyd, whMum, whBlr, whDel));
 
+        // 11b. Seed Warehouse Staff Users assigned to regional hubs
+        User staffHyd = User.builder()
+                .email("staff@shopstack.com")
+                .password(passwordEncoder.encode("staff123"))
+                .fullName("Vikram Rao (Hyderabad Staff)")
+                .phoneNumber("+91 40 4402 1100")
+                .role(Role.WAREHOUSE_STAFF)
+                .assignedWarehouse(whHyd)
+                .enabled(true)
+                .build();
+
+        User staffBlr = User.builder()
+                .email("staff.blr@shopstack.com")
+                .password(passwordEncoder.encode("staff123"))
+                .fullName("Anita Sharma (Bengaluru Staff)")
+                .phoneNumber("+91 80 4392 1100")
+                .role(Role.WAREHOUSE_STAFF)
+                .assignedWarehouse(whBlr)
+                .enabled(true)
+                .build();
+
+        User staffMum = User.builder()
+                .email("staff.mum@shopstack.com")
+                .password(passwordEncoder.encode("staff123"))
+                .fullName("Rahul Desai (Mumbai Staff)")
+                .phoneNumber("+91 22 6194 1100")
+                .role(Role.WAREHOUSE_STAFF)
+                .assignedWarehouse(whMum)
+                .enabled(true)
+                .build();
+
+        User staffDel = User.builder()
+                .email("staff.del@shopstack.com")
+                .password(passwordEncoder.encode("staff123"))
+                .fullName("Sunil Kumar (Delhi Staff)")
+                .phoneNumber("+91 11 4102 1100")
+                .role(Role.WAREHOUSE_STAFF)
+                .assignedWarehouse(whDel)
+                .enabled(true)
+                .build();
+
+        userRepository.saveAll(List.of(staffHyd, staffBlr, staffMum, staffDel));
+
         // 12. Seed Warehouse Inventories for Catalog Products
         WarehouseInventory invP1Hyd = WarehouseInventory.builder()
-                .warehouse(whHyd).product(p1).totalStock(25).allocatedStock(0).availableStock(25).aisleLocation("Aisle 02, Bay B-04").minThreshold(8).lastRestockedAt(now.minusDays(7)).build();
+                .warehouse(whHyd).product(p1).totalStock(25).allocatedStock(0).availableStock(25).damagedStock(2).aisleLocation("Aisle 02, Bay B-04").minThreshold(8).lastRestockedAt(now.minusDays(7)).build();
         WarehouseInventory invP1Mum = WarehouseInventory.builder()
-                .warehouse(whMum).product(p1).totalStock(20).allocatedStock(0).availableStock(20).aisleLocation("Aisle 01, Bay A-11").minThreshold(5).lastRestockedAt(now.minusDays(6)).build();
+                .warehouse(whMum).product(p1).totalStock(20).allocatedStock(0).availableStock(20).damagedStock(0).aisleLocation("Aisle 01, Bay A-11").minThreshold(5).lastRestockedAt(now.minusDays(6)).build();
 
         WarehouseInventory invP2Hyd = WarehouseInventory.builder()
-                .warehouse(whHyd).product(p2).totalStock(8).allocatedStock(0).availableStock(8).aisleLocation("Aisle 04, Secure Vault 2").minThreshold(3).lastRestockedAt(now.minusDays(10)).build();
+                .warehouse(whHyd).product(p2).totalStock(8).allocatedStock(0).availableStock(8).damagedStock(0).aisleLocation("Aisle 04, Secure Vault 2").minThreshold(3).lastRestockedAt(now.minusDays(10)).build();
         WarehouseInventory invP2Del = WarehouseInventory.builder()
-                .warehouse(whDel).product(p2).totalStock(4).allocatedStock(0).availableStock(4).aisleLocation("Aisle 02, Secure Vault 1").minThreshold(2).lastRestockedAt(now.minusDays(8)).build();
+                .warehouse(whDel).product(p2).totalStock(4).allocatedStock(0).availableStock(4).damagedStock(0).aisleLocation("Aisle 02, Secure Vault 1").minThreshold(2).lastRestockedAt(now.minusDays(8)).build();
 
         WarehouseInventory invP3Blr = WarehouseInventory.builder()
-                .warehouse(whBlr).product(p3).totalStock(50).allocatedStock(2).availableStock(48).aisleLocation("Aisle 06, Rack C-09").minThreshold(15).lastRestockedAt(now.minusDays(4)).build();
+                .warehouse(whBlr).product(p3).totalStock(50).allocatedStock(2).availableStock(48).damagedStock(1).aisleLocation("Aisle 06, Rack C-09").minThreshold(15).lastRestockedAt(now.minusDays(4)).build();
         WarehouseInventory invP3Mum = WarehouseInventory.builder()
-                .warehouse(whMum).product(p3).totalStock(30).allocatedStock(0).availableStock(30).aisleLocation("Aisle 05, Rack D-02").minThreshold(10).lastRestockedAt(now.minusDays(5)).build();
+                .warehouse(whMum).product(p3).totalStock(30).allocatedStock(0).availableStock(30).damagedStock(0).aisleLocation("Aisle 05, Rack D-02").minThreshold(10).lastRestockedAt(now.minusDays(5)).build();
 
         WarehouseInventory invP4Hyd = WarehouseInventory.builder()
-                .warehouse(whHyd).product(p4).totalStock(15).allocatedStock(0).availableStock(15).aisleLocation("Aisle 03, Glass Bay G-01").minThreshold(5).lastRestockedAt(now.minusDays(12)).build();
+                .warehouse(whHyd).product(p4).totalStock(15).allocatedStock(0).availableStock(15).damagedStock(0).aisleLocation("Aisle 03, Glass Bay G-01").minThreshold(5).lastRestockedAt(now.minusDays(12)).build();
         WarehouseInventory invP4Blr = WarehouseInventory.builder()
-                .warehouse(whBlr).product(p4).totalStock(10).allocatedStock(0).availableStock(10).aisleLocation("Aisle 03, Glass Bay G-04").minThreshold(4).lastRestockedAt(now.minusDays(9)).build();
+                .warehouse(whBlr).product(p4).totalStock(10).allocatedStock(0).availableStock(10).damagedStock(0).aisleLocation("Aisle 03, Glass Bay G-04").minThreshold(4).lastRestockedAt(now.minusDays(9)).build();
 
         WarehouseInventory invP5Mum = WarehouseInventory.builder()
-                .warehouse(whMum).product(p5).totalStock(40).allocatedStock(0).availableStock(40).aisleLocation("Aisle 08, Rack E-14").minThreshold(12).lastRestockedAt(now.minusDays(3)).build();
+                .warehouse(whMum).product(p5).totalStock(40).allocatedStock(0).availableStock(40).damagedStock(0).aisleLocation("Aisle 08, Rack E-14").minThreshold(12).lastRestockedAt(now.minusDays(3)).build();
         WarehouseInventory invP5Del = WarehouseInventory.builder()
-                .warehouse(whDel).product(p5).totalStock(20).allocatedStock(0).availableStock(20).aisleLocation("Aisle 07, Rack F-05").minThreshold(6).lastRestockedAt(now.minusDays(4)).build();
+                .warehouse(whDel).product(p5).totalStock(20).allocatedStock(0).availableStock(20).damagedStock(0).aisleLocation("Aisle 07, Rack F-05").minThreshold(6).lastRestockedAt(now.minusDays(4)).build();
 
         warehouseInventoryRepository.saveAll(List.of(
                 invP1Hyd, invP1Mum, invP2Hyd, invP2Del, invP3Blr, invP3Mum, invP4Hyd, invP4Blr, invP5Mum, invP5Del
@@ -859,6 +905,37 @@ public class DataInitializer implements CommandLineRunner {
 
         stockMovementRepository.saveAll(List.of(mov1, mov2, mov3, mov4, mov5, mov6));
 
-        System.out.println(">>> [ShopStack DataInitializer] Successfully initialized demo marketplace dataset with live orders, payments, commissions, promotional coupons & regional warehouse fulfillment network.");
+        // 15. Seed Sample Customer Return Requests for Review & QC Workflow
+        ReturnRequest ret1 = ReturnRequest.builder()
+                .order(order1)
+                .orderItem(item1)
+                .customer(customer1)
+                .warehouse(whHyd)
+                .reason("Defective power button on headphones")
+                .returnReasonType("DEFECTIVE")
+                .customerComments("The left active noise cancellation toggle is unresponsive out of the box.")
+                .status("RECEIVED_AT_WAREHOUSE")
+                .refundAmount(order1.getTotalAmount())
+                .adminNotes("Approved return. Item received at Hyderabad fulfillment hub for QC.")
+                .inspectedBy("Vikram Rao (Hyderabad Staff)")
+                .createdAt(now.minusDays(1))
+                .build();
+
+        ReturnRequest ret2 = ReturnRequest.builder()
+                .order(order2)
+                .orderItem(item2)
+                .customer(customer2)
+                .warehouse(whHyd)
+                .reason("Wrong technical specification received")
+                .returnReasonType("WRONG_ITEM")
+                .customerComments("Received 16GB RAM model instead of ordered 32GB RAM variant.")
+                .status("PENDING_REVIEW")
+                .refundAmount(order2.getTotalAmount())
+                .createdAt(now.minusHours(6))
+                .build();
+
+        returnRequestRepository.saveAll(List.of(ret1, ret2));
+
+        System.out.println(">>> [ShopStack DataInitializer] Successfully initialized demo marketplace dataset with live orders, payments, commissions, promotional coupons, regional warehouse fulfillment network & returns QC pipeline.");
     }
 }

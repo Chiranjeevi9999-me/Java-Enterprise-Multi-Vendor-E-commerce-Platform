@@ -5,11 +5,11 @@ import {
   RefreshCw, Plus, Search, Filter, MapPin, Box, ShieldCheck, FileText,
   Sliders, ArrowUpRight, BarChart3, Database, Send, PlayCircle, Check,
   X, Sparkles, Navigation, Phone, Mail, Edit2, ChevronRight, Archive,
-  Info, QrCode, Tag
+  Info, QrCode, Tag, RotateCcw
 } from 'lucide-react';
 
 const WarehouseManagementTab = () => {
-  // Sub-tabs: 'PIPELINE' | 'INVENTORY' | 'WAREHOUSES' | 'MOVEMENTS' | 'SIMULATOR'
+  // Sub-tabs: 'PIPELINE' | 'RETURNS_APPROVAL' | 'VENDOR_TRANSFER' | 'INVENTORY' | 'WAREHOUSES' | 'MOVEMENTS' | 'SIMULATOR'
   const [subTab, setSubTab] = useState('PIPELINE');
 
   // Loading states
@@ -24,6 +24,7 @@ const WarehouseManagementTab = () => {
   const [allocations, setAllocations] = useState([]);
   const [movements, setMovements] = useState([]);
   const [products, setProducts] = useState([]);
+  const [returnsList, setReturnsList] = useState([]);
 
   // Filter states
   const [pipelineWarehouseFilter, setPipelineWarehouseFilter] = useState('ALL');
@@ -31,6 +32,25 @@ const WarehouseManagementTab = () => {
   const [inventoryWarehouseFilter, setInventoryWarehouseFilter] = useState('ALL');
   const [movementStageFilter, setMovementStageFilter] = useState('ALL');
   const [movementSearch, setMovementSearch] = useState('');
+
+  // Return Review Modal State
+  const [selectedReturnForReview, setSelectedReturnForReview] = useState(null);
+  const [reviewForm, setReviewForm] = useState({
+    approved: true,
+    adminNotes: 'Return request approved. Item routed to regional hub for physical QC.',
+    targetWarehouseId: ''
+  });
+
+  // Vendor Stock Transfer State
+  const [showVendorTransferModal, setShowVendorTransferModal] = useState(false);
+  const [vendorTransferForm, setVendorTransferForm] = useState({
+    productId: '',
+    warehouseId: '',
+    quantity: 20,
+    aisleLocation: 'Aisle 01, Inbound Bay 1',
+    notes: 'Vendor bulk batch replenishment',
+    transferredBy: 'Vendor Operations'
+  });
 
   // Modal states
   const [selectedAllocationForPick, setSelectedAllocationForPick] = useState(null);
@@ -84,13 +104,14 @@ const WarehouseManagementTab = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [analyticsRes, warehousesRes, inventoryRes, allocationsRes, movementsRes, productsRes] = await Promise.all([
+      const [analyticsRes, warehousesRes, inventoryRes, allocationsRes, movementsRes, productsRes, returnsRes] = await Promise.all([
         warehouseApi.getAnalyticsSummary().catch(() => ({ data: null })),
         warehouseApi.getAll().catch(() => ({ data: [] })),
         warehouseApi.getAllInventory().catch(() => ({ data: [] })),
         warehouseApi.getAllocations().catch(() => ({ data: [] })),
         warehouseApi.getStockMovements().catch(() => ({ data: [] })),
-        productApi.getAll({ size: 50 }).catch(() => ({ data: { content: [] } }))
+        productApi.getAll({ size: 50 }).catch(() => ({ data: { content: [] } })),
+        warehouseApi.getAllReturns().catch(() => ({ data: [] }))
       ]);
 
       setAnalytics(analyticsRes.data);
@@ -99,6 +120,7 @@ const WarehouseManagementTab = () => {
       setAllocations(allocationsRes.data || []);
       setMovements(movementsRes.data || []);
       setProducts(productsRes.data?.content || productsRes.data || []);
+      setReturnsList(returnsRes.data || []);
     } catch (err) {
       console.error('Failed to load warehouse data:', err);
     } finally {
@@ -212,6 +234,52 @@ const WarehouseManagementTab = () => {
       handleRefresh();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to save warehouse.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Review Customer Return (Admin Approve / Reject)
+  const handleReviewReturn = async (returnId, approved, notes, warehouseId) => {
+    setActionLoading(true);
+    try {
+      await warehouseApi.reviewReturn(returnId, {
+        approved,
+        adminNotes: notes,
+        targetWarehouseId: warehouseId ? Number(warehouseId) : (warehouses[0]?.id || 1)
+      });
+      setSelectedReturnForReview(null);
+      handleRefresh();
+      alert(approved ? 'Return approved! Product routed to regional warehouse for QC inspection.' : 'Return request rejected.');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to review return request.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Vendor Stock Transfer Submission
+  const handleVendorTransferSubmit = async (e) => {
+    e.preventDefault();
+    if (!vendorTransferForm.productId || !vendorTransferForm.warehouseId) {
+      alert('Please select both a product and destination warehouse.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await warehouseApi.transferVendorStock({
+        productId: Number(vendorTransferForm.productId),
+        warehouseId: Number(vendorTransferForm.warehouseId),
+        quantity: Number(vendorTransferForm.quantity),
+        aisleLocation: vendorTransferForm.aisleLocation,
+        notes: vendorTransferForm.notes,
+        transferredBy: vendorTransferForm.transferredBy
+      });
+      setShowVendorTransferModal(false);
+      handleRefresh();
+      alert('Vendor stock successfully distributed to target warehouse hub!');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to transfer vendor stock.');
     } finally {
       setActionLoading(false);
     }
@@ -508,7 +576,9 @@ const WarehouseManagementTab = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
           {[
             { id: 'PIPELINE', label: 'Fulfillment Pipeline', icon: Layers, badge: allocations.filter(a => a.stage !== 'SHIPPED').length },
-            { id: 'INVENTORY', label: 'Inventory Matrix', icon: Database, badge: inventoryList.length },
+            { id: 'RETURNS_APPROVAL', label: 'Returns Review & QC', icon: RotateCcw, badge: returnsList.filter(r => r.status === 'PENDING_REVIEW').length },
+            { id: 'VENDOR_TRANSFER', label: 'Vendor Stock Assignment', icon: Box, badge: 'Transfer' },
+            { id: 'INVENTORY', label: 'Inventory & Quarantine', icon: Database, badge: inventoryList.length },
             { id: 'WAREHOUSES', label: 'Warehouse Hubs', icon: MapPin, badge: warehouses.length },
             { id: 'MOVEMENTS', label: 'Stock Movement Audit Logs', icon: FileText, badge: movements.length },
             { id: 'SIMULATOR', label: '1-Click Review Simulator', icon: Sparkles, badge: 'Live Demo' }
@@ -818,6 +888,206 @@ const WarehouseManagementTab = () => {
               ))}
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* 3b. TAB: RETURNS REVIEW & QC PIPELINE */}
+      {subTab === 'RETURNS_APPROVAL' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div className="card" style={{ padding: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <RotateCcw size={20} color="#be185d" /> Customer Return Requests & Warehouse Routing
+              </h3>
+              <p style={{ color: '#64748b', fontSize: '0.85rem', margin: '0.25rem 0 0 0' }}>
+                Review return cases submitted by customers. Approve and designate the destination regional warehouse for Staff QC inspection.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <span className="badge badge-warning" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>
+                Pending Review: {returnsList.filter(r => r.status === 'PENDING_REVIEW').length}
+              </span>
+            </div>
+          </div>
+
+          <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <th style={{ padding: '0.85rem 1.25rem' }}>Return ID & Order</th>
+                  <th style={{ padding: '0.85rem 1rem' }}>Customer</th>
+                  <th style={{ padding: '0.85rem 1rem' }}>Product Item</th>
+                  <th style={{ padding: '0.85rem 1rem' }}>Return Category & Reason</th>
+                  <th style={{ padding: '0.85rem 1rem' }}>Assigned QC Hub</th>
+                  <th style={{ padding: '0.85rem 1rem' }}>Current Status</th>
+                  <th style={{ padding: '0.85rem 1.25rem', textAlign: 'right' }}>Admin Decision</th>
+                </tr>
+              </thead>
+              <tbody>
+                {returnsList.map(ret => (
+                  <tr key={ret.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '1rem 1.25rem' }}>
+                      <div style={{ fontWeight: 800, color: '#be185d' }}>RET-#{ret.id}</div>
+                      <div style={{ fontSize: '0.78rem', color: '#64748b' }}>Order: <strong>{ret.orderNumber}</strong></div>
+                    </td>
+                    <td style={{ padding: '1rem' }}>
+                      <div style={{ fontWeight: 600, color: '#1e293b' }}>{ret.customerName}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{ret.customerEmail}</div>
+                    </td>
+                    <td style={{ padding: '1rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <img src={ret.productImageUrl} alt="" style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover' }} />
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#0f172a' }}>{ret.productTitle}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Qty: {ret.quantity || 1} • Refund: <strong>₹{ret.refundAmount?.toFixed(2)}</strong></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: '1rem' }}>
+                      <span style={{ background: '#f1f5f9', color: '#334155', padding: '2px 6px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700 }}>
+                        {ret.returnReasonType || 'DEFECTIVE'}
+                      </span>
+                      <div style={{ fontSize: '0.8rem', color: '#1e293b', marginTop: '4px', maxWidth: '240px' }}>{ret.reason}</div>
+                      {ret.customerComments && (
+                        <div style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', marginTop: '2px' }}>"{ret.customerComments}"</div>
+                      )}
+                    </td>
+                    <td style={{ padding: '1rem' }}>
+                      <div style={{ fontWeight: 600, color: '#1e293b' }}>{ret.warehouseName || 'Pending Hub Assignment'}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#2563eb' }}>{ret.warehouseCode}</div>
+                    </td>
+                    <td style={{ padding: '1rem' }}>
+                      <span className={`badge ${
+                        ret.status === 'PENDING_REVIEW' ? 'badge-warning' :
+                        ret.status === 'APPROVED' ? 'badge-primary' :
+                        ret.status === 'RECEIVED_AT_WAREHOUSE' ? 'badge-primary' :
+                        ret.status === 'QC_PASSED_RESTOCKED' ? 'badge-customer' :
+                        ret.status === 'QC_FAILED_DAMAGED' ? 'badge-danger' : 'badge-secondary'
+                      }`}>
+                        {ret.status}
+                      </span>
+                    </td>
+                    <td style={{ padding: '1rem 1.25rem', textAlign: 'right' }}>
+                      {ret.status === 'PENDING_REVIEW' ? (
+                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => {
+                              setSelectedReturnForReview(ret);
+                              setReviewForm({
+                                approved: true,
+                                adminNotes: 'Return verified and approved. Send to assigned warehouse for inspection.',
+                                targetWarehouseId: warehouses[0]?.id || ''
+                              });
+                            }}
+                            className="btn btn-primary btn-sm"
+                            style={{ background: '#10b981', borderColor: '#10b981', fontSize: '0.78rem' }}
+                          >
+                            <Check size={12} /> Approve
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedReturnForReview(ret);
+                              setReviewForm({
+                                approved: false,
+                                adminNotes: 'Return rejected: Issue outside 7-day policy window.',
+                                targetWarehouseId: warehouses[0]?.id || ''
+                              });
+                            }}
+                            className="btn btn-danger btn-sm"
+                            style={{ fontSize: '0.78rem' }}
+                          >
+                            <X size={12} /> Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                          Reviewed: <strong style={{ color: '#0f172a' }}>{ret.adminNotes ? 'Yes' : 'Auto'}</strong>
+                          {ret.qcDecision && (
+                            <div style={{ color: ret.qcDecision === 'PASS' ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
+                              QC: {ret.qcDecision}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {returnsList.length === 0 && (
+                  <tr>
+                    <td colSpan="7" style={{ padding: '3rem 1rem', textAlign: 'center', color: '#64748b' }}>
+                      No customer return requests submitted.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 3c. TAB: VENDOR STOCK ASSIGNMENT */}
+      {subTab === 'VENDOR_TRANSFER' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div className="card" style={{ padding: '1.5rem', background: '#f8fafc' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Box size={22} color="#2563eb" /> Vendor Inbound Stock Distribution
+                </h3>
+                <p style={{ color: '#64748b', fontSize: '0.85rem', margin: '0.25rem 0 0 0' }}>
+                  Distribute merchant inventory to regional warehouse fulfillment centers across India.
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setVendorTransferForm({
+                    productId: products[0]?.id || '',
+                    warehouseId: warehouses[0]?.id || '',
+                    quantity: 25,
+                    aisleLocation: 'Aisle 02, Inbound Bay 3',
+                    notes: 'Merchant bulk catalog replenishment',
+                    transferredBy: 'Merchant Logistics Rep'
+                  });
+                  setShowVendorTransferModal(true);
+                }}
+                className="btn btn-primary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                <Plus size={16} /> New Stock Distribution Batch
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+              {warehouses.map(wh => {
+                const whInventory = inventoryList.filter(i => i.warehouseId === wh.id);
+                const totalStockInWh = whInventory.reduce((acc, curr) => acc + curr.totalStock, 0);
+
+                return (
+                  <div key={wh.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>{wh.name}</div>
+                        <div style={{ fontSize: '0.78rem', color: '#2563eb', fontWeight: 600 }}>{wh.code} • {wh.city}</div>
+                      </div>
+                      <span className="badge badge-customer" style={{ fontSize: '0.72rem' }}>Active Node</span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Catalog SKUs Stored:</span>
+                      <strong style={{ color: '#0f172a' }}>{whInventory.length} products</strong>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Total Physical Units:</span>
+                      <strong style={{ color: '#16a34a' }}>{totalStockInWh.toLocaleString()} units</strong>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -1871,8 +2141,220 @@ const WarehouseManagementTab = () => {
         </div>
       )}
 
+      {/* =========================================================================
+          MODAL: ADMIN RETURN REVIEW (APPROVE / REJECT)
+      ========================================================================= */}
+      {selectedReturnForReview && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div style={{ background: '#ffffff', borderRadius: '16px', maxWidth: '520px', width: '100%', padding: '1.75rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <RotateCcw size={20} color="#be185d" /> Review Customer Return #{selectedReturnForReview.id}
+              </h3>
+              <button onClick={() => setSelectedReturnForReview(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '10px', marginBottom: '1.25rem', border: '1px solid #e2e8f0' }}>
+              <div style={{ fontWeight: 700, color: '#0f172a' }}>{selectedReturnForReview.productTitle}</div>
+              <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '2px' }}>
+                Customer: <strong>{selectedReturnForReview.customerName}</strong> • Order #: <strong>{selectedReturnForReview.orderNumber}</strong>
+              </div>
+              <div style={{ fontSize: '0.82rem', color: '#dc2626', marginTop: '4px', fontWeight: 600 }}>
+                Stated Issue: {selectedReturnForReview.reason}
+              </div>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleReviewReturn(
+                selectedReturnForReview.id,
+                reviewForm.approved,
+                reviewForm.adminNotes,
+                reviewForm.targetWarehouseId
+              );
+            }}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: '0.4rem' }}>
+                  Admin Decision:
+                </label>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, color: '#16a34a' }}>
+                    <input
+                      type="radio"
+                      name="decision"
+                      checked={reviewForm.approved === true}
+                      onChange={() => setReviewForm({ ...reviewForm, approved: true })}
+                    />
+                    Approve Return (Route to Warehouse)
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontWeight: 700, color: '#dc2626' }}>
+                    <input
+                      type="radio"
+                      name="decision"
+                      checked={reviewForm.approved === false}
+                      onChange={() => setReviewForm({ ...reviewForm, approved: false })}
+                    />
+                    Reject Return
+                  </label>
+                </div>
+              </div>
+
+              {reviewForm.approved && (
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#334155', marginBottom: '0.35rem' }}>
+                    Destination Regional Warehouse for Inspection:
+                  </label>
+                  <select
+                    required
+                    value={reviewForm.targetWarehouseId || (warehouses[0]?.id || '')}
+                    onChange={(e) => setReviewForm({ ...reviewForm, targetWarehouseId: e.target.value })}
+                    style={{ width: '100%', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.88rem' }}
+                  >
+                    {warehouses.map(wh => (
+                      <option key={wh.id} value={wh.id}>{wh.name} ({wh.code}) - {wh.city}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#334155', marginBottom: '0.35rem' }}>
+                  Admin Review Notes:
+                </label>
+                <textarea
+                  rows="3"
+                  required
+                  value={reviewForm.adminNotes}
+                  onChange={(e) => setReviewForm({ ...reviewForm, adminNotes: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.88rem' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button type="button" onClick={() => setSelectedReturnForReview(null)} className="btn btn-secondary">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="btn btn-primary"
+                  style={{ background: reviewForm.approved ? '#10b981' : '#ef4444', borderColor: reviewForm.approved ? '#10b981' : '#ef4444' }}
+                >
+                  {actionLoading ? 'Saving...' : reviewForm.approved ? 'Approve & Route' : 'Reject Request'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: VENDOR STOCK TRANSFER
+      ========================================================================= */}
+      {showVendorTransferModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div style={{ background: '#ffffff', borderRadius: '16px', maxWidth: '500px', width: '100%', padding: '1.75rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Box size={20} color="#2563eb" /> Inbound Stock Distribution Batch
+              </h3>
+              <button onClick={() => setShowVendorTransferModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleVendorTransferSubmit}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#334155', marginBottom: '0.35rem' }}>
+                  Select Catalog Product:
+                </label>
+                <select
+                  required
+                  value={vendorTransferForm.productId}
+                  onChange={(e) => setVendorTransferForm({ ...vendorTransferForm, productId: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.88rem' }}
+                >
+                  <option value="">-- Choose Product --</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>{p.title} (SKU: {p.sku || 'SKU-' + p.id})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#334155', marginBottom: '0.35rem' }}>
+                  Destination Regional Warehouse Hub:
+                </label>
+                <select
+                  required
+                  value={vendorTransferForm.warehouseId}
+                  onChange={(e) => setVendorTransferForm({ ...vendorTransferForm, warehouseId: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.88rem' }}
+                >
+                  <option value="">-- Choose Warehouse --</option>
+                  {warehouses.map(wh => (
+                    <option key={wh.id} value={wh.id}>{wh.name} ({wh.code}) - {wh.city}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#334155', marginBottom: '0.35rem' }}>
+                    Stock Units:
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={vendorTransferForm.quantity}
+                    onChange={(e) => setVendorTransferForm({ ...vendorTransferForm, quantity: e.target.value })}
+                    style={{ width: '100%', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.88rem' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#334155', marginBottom: '0.35rem' }}>
+                    Aisle Shelf Location:
+                  </label>
+                  <input
+                    type="text"
+                    value={vendorTransferForm.aisleLocation}
+                    onChange={(e) => setVendorTransferForm({ ...vendorTransferForm, aisleLocation: e.target.value })}
+                    style={{ width: '100%', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.88rem' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#334155', marginBottom: '0.35rem' }}>
+                  Distribution Batch Notes:
+                </label>
+                <input
+                  type="text"
+                  value={vendorTransferForm.notes}
+                  onChange={(e) => setVendorTransferForm({ ...vendorTransferForm, notes: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.88rem' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button type="button" onClick={() => setShowVendorTransferModal(false)} className="btn btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" disabled={actionLoading} className="btn btn-primary">
+                  {actionLoading ? 'Distributing...' : 'Transfer Stock to Warehouse'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
 
 export default WarehouseManagementTab;
+

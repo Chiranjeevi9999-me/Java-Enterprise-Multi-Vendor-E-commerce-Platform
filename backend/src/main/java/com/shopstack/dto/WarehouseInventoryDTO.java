@@ -18,6 +18,7 @@ public class WarehouseInventoryDTO {
     private Integer totalStock;
     private Integer allocatedStock;
     private Integer availableStock;
+    private Integer damagedStock;
     private String aisleLocation;
     private Integer minThreshold;
     private Boolean isLowStock;
@@ -71,6 +72,9 @@ public class WarehouseInventoryDTO {
 
     public Integer getAvailableStock() { return availableStock; }
     public void setAvailableStock(Integer availableStock) { this.availableStock = availableStock; }
+
+    public Integer getDamagedStock() { return damagedStock; }
+    public void setDamagedStock(Integer damagedStock) { this.damagedStock = damagedStock; }
 
     public String getAisleLocation() { return aisleLocation; }
     public void setAisleLocation(String aisleLocation) { this.aisleLocation = aisleLocation; }

@@ -27,4 +27,16 @@ export const warehouseApi = {
   // Audit Logs & Analytics
   getStockMovements: (params) => api.get('/warehouses/stock-movements', { params }),
   getAnalyticsSummary: () => api.get('/warehouses/analytics/summary'),
+
+  // Customer Returns & QC Inspection
+  requestReturn: (data) => api.post('/warehouses/returns/request', data),
+  getAllReturns: (params) => api.get('/warehouses/returns', { params }),
+  getMyReturns: () => api.get('/warehouses/returns/my-returns'),
+  reviewReturn: (id, data) => api.post(`/warehouses/returns/${id}/review`, data),
+  receiveReturn: (id) => api.post(`/warehouses/returns/${id}/receive`),
+  performQcInspection: (id, data) => api.post(`/warehouses/returns/${id}/qc-inspect`, data),
+
+  // Vendor Stock Transfer to Warehouses
+  transferVendorStock: (data) => api.post('/warehouses/vendor-stock-transfer', data),
 };
+
