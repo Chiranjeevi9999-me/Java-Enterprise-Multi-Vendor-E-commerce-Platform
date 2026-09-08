@@ -1,8 +1,9 @@
 server:
-  port: 8081
+  port: ${PORT:8081}
+  address: 0.0.0.0
   servlet:
     context-path: /
-
+    
 spring:
   application:
     name: shopstack-backend
