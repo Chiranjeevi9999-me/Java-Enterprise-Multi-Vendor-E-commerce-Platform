@@ -212,10 +212,19 @@ class WarehouseServiceTest {
         Order refreshedOrder = orderRepository.findById(savedOrder.getId()).get();
         assertEquals(OrderStatus.SHIPPED, refreshedOrder.getStatus());
 
+        // Step G: Deliver Shipment
+        OrderWarehouseAllocationDTO delivered = warehouseService.deliverShipment(allocId);
+        assertEquals(StockMovementStage.DELIVERED, delivered.getStage());
+
+        // Verify Order status transitioned to DELIVERED
+        Order deliveredOrder = orderRepository.findById(savedOrder.getId()).get();
+        assertEquals(OrderStatus.DELIVERED, deliveredOrder.getStatus());
+        assertEquals(PaymentStatus.PAID, deliveredOrder.getPaymentStatus());
+
         // Verify complete stock movement audit trail for this order
         List<StockMovementDTO> movements = warehouseService.getStockMovements(null, null, savedOrder.getId(), null);
         assertNotNull(movements);
-        assertTrue(movements.size() >= 4); // ALLOCATED, PICKED, PACKED, READY_FOR_SHIPMENT, SHIPPED
+        assertTrue(movements.size() >= 5); // ALLOCATED, PICKED, PACKED, READY_FOR_SHIPMENT, SHIPPED, DELIVERED
     }
 
     @Test

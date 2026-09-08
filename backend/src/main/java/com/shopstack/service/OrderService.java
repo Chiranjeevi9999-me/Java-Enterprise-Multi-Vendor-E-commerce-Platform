@@ -199,7 +199,7 @@ public class OrderService {
     }
 
     /**
-     * Update Order Status (Deducts stock EXACTLY ONCE for COD orders when transition to CONFIRMED happens).
+     * Update Order Status (Handles stock deduction on confirmation and stock release on cancellation).
      */
     @Transactional
     public Order updateOrderStatus(Long orderId, OrderStatus newStatus) {
@@ -208,7 +208,11 @@ public class OrderService {
 
         OrderStatus previousStatus = order.getStatus();
 
-        // Stock deduction check for COD order confirmation (PENDING -> CONFIRMED)
+        if (previousStatus == newStatus) {
+            return order;
+        }
+
+        // 1. Stock deduction check for COD / Pending order confirmation (PENDING -> CONFIRMED)
         if (previousStatus == OrderStatus.PENDING && newStatus == OrderStatus.CONFIRMED) {
             order.setStatus(OrderStatus.CONFIRMED);
             order.setPaymentStatus(PaymentStatus.PAID);
@@ -224,8 +228,42 @@ public class OrderService {
                 }
                 productRepository.save(product);
             }
-        } else {
+        } 
+        // 2. Order Cancellation Stock Restoration & Warehouse Deallocation
+        else if (newStatus == OrderStatus.CANCELLED) {
+            order.setStatus(OrderStatus.CANCELLED);
+            if (order.getPaymentStatus() == PaymentStatus.PAID) {
+                order.setPaymentStatus(PaymentStatus.REFUNDED);
+            } else {
+                order.setPaymentStatus(PaymentStatus.CANCELLED);
+            }
+
+            // Restore catalog stock if stock was previously deducted (i.e. confirmed/processing/shipped)
+            if (previousStatus != OrderStatus.PENDING) {
+                for (OrderItem item : order.getItems()) {
+                    Product product = item.getProduct();
+                    int currentStock = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+                    product.setStockQuantity(currentStock + item.getQuantity());
+                    if (product.getStatus() == ProductStatus.OUT_OF_STOCK && product.getStockQuantity() > 0) {
+                        product.setStatus(ProductStatus.ACTIVE);
+                    }
+                    productRepository.save(product);
+                }
+            }
+
+            // Release warehouse allocations
+            try {
+                warehouseService.cancelOrderAllocations(order);
+            } catch (Exception e) {
+                System.err.println("Warehouse cancellation notice: " + e.getMessage());
+            }
+        } 
+        // 3. Normal status progression
+        else {
             order.setStatus(newStatus);
+            if (newStatus == OrderStatus.DELIVERED) {
+                order.setPaymentStatus(PaymentStatus.PAID);
+            }
         }
 
         Order saved = orderRepository.save(order);

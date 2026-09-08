@@ -23,6 +23,7 @@ export const warehouseApi = {
   packItem: (allocationId, data) => api.post(`/warehouses/allocations/${allocationId}/pack`, data),
   prepareShipment: (allocationId, data) => api.post(`/warehouses/allocations/${allocationId}/prepare-shipment`, data),
   dispatchItem: (allocationId) => api.post(`/warehouses/allocations/${allocationId}/dispatch`),
+  deliverItem: (allocationId) => api.post(`/warehouses/allocations/${allocationId}/deliver`),
 
   // Audit Logs & Analytics
   getStockMovements: (params) => api.get('/warehouses/stock-movements', { params }),

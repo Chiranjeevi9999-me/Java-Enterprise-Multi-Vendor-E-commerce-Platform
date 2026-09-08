@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authApi } from '../api';
-import { Mail } from 'lucide-react';
+import { getErrorMessage } from '../api/axios';
+import { Mail, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
@@ -18,7 +19,7 @@ const ForgotPassword = () => {
       setMessage('If an account with that email exists, a password reset link has been sent.');
       setTimeout(() => navigate('/login'), 3000);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to request password reset.');
+      setError(getErrorMessage(err, 'Failed to request password reset.'));
     }
   };
 

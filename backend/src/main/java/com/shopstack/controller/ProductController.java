@@ -68,8 +68,23 @@ public class ProductController {
     public ResponseEntity<Product> createProduct(
             @AuthenticationPrincipal UserPrincipal principal,
             @Valid @RequestBody CreateProductRequest request) {
-        VendorProfile vendor = vendorService.getVendorByUserId(principal.getId());
-        return ResponseEntity.ok(productService.createProduct(vendor.getId(), request));
+        Long vendorId;
+        if (principal.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))) {
+            try {
+                VendorProfile vendor = vendorService.getVendorByUserId(principal.getId());
+                vendorId = vendor.getId();
+            } catch (Exception e) {
+                // If admin does not have a vendor profile, attach to first available vendor
+                vendorId = vendorService.getAllVendors().stream()
+                        .findFirst()
+                        .map(VendorProfile::getId)
+                        .orElse(1L);
+            }
+        } else {
+            VendorProfile vendor = vendorService.getVendorByUserId(principal.getId());
+            vendorId = vendor.getId();
+        }
+        return ResponseEntity.ok(productService.createProduct(vendorId, request));
     }
 
     @PutMapping("/{id}/status")

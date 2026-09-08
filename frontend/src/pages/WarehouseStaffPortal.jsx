@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
 import { warehouseApi } from '../api';
+import { getErrorMessage } from '../api/axios';
 import {
   Package, Truck, CheckCircle2, Clock, AlertTriangle, ArrowRight,
   RefreshCw, Search, Filter, MapPin, Box, ShieldCheck, FileText,
@@ -11,6 +13,7 @@ import {
 
 const WarehouseStaffPortal = () => {
   const { user } = useAuth();
+  const { showToast } = useCart();
 
   // State
   const [warehouses, setWarehouses] = useState([]);
@@ -103,10 +106,11 @@ const WarehouseStaffPortal = () => {
     setActionLoading(true);
     try {
       await warehouseApi.pickItem(selectedAllocForPick.id, pickForm);
+      showToast('Item successfully picked from shelf!', 'success');
       setSelectedAllocForPick(null);
       setRefreshKey(k => k + 1);
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to confirm pick');
+      showToast(getErrorMessage(err, 'Failed to confirm pick'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -119,10 +123,11 @@ const WarehouseStaffPortal = () => {
     setActionLoading(true);
     try {
       await warehouseApi.packItem(selectedAllocForPack.id, packForm);
+      showToast('Item successfully packed and sealed!', 'success');
       setSelectedAllocForPack(null);
       setRefreshKey(k => k + 1);
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to confirm pack');
+      showToast(getErrorMessage(err, 'Failed to confirm pack'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -135,10 +140,11 @@ const WarehouseStaffPortal = () => {
     setActionLoading(true);
     try {
       await warehouseApi.prepareShipment(selectedAllocForShip.id, shipForm);
+      showToast('Shipment prepared with tracking manifest!', 'success');
       setSelectedAllocForShip(null);
       setRefreshKey(k => k + 1);
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to prepare shipment');
+      showToast(getErrorMessage(err, 'Failed to prepare shipment'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -146,13 +152,27 @@ const WarehouseStaffPortal = () => {
 
   // Handler: Dispatch Item
   const handleDispatch = async (allocationId) => {
-    if (!window.confirm('Confirm handover to logistics courier truck?')) return;
     setActionLoading(true);
     try {
       await warehouseApi.dispatchItem(allocationId);
+      showToast('Package dispatched with courier driver!', 'success');
       setRefreshKey(k => k + 1);
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to dispatch shipment');
+      showToast(getErrorMessage(err, 'Failed to dispatch shipment'), 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handler: Confirm Delivery
+  const handleDeliver = async (allocationId) => {
+    setActionLoading(true);
+    try {
+      await warehouseApi.deliverItem(allocationId);
+      showToast('Delivery confirmed to customer address!', 'success');
+      setRefreshKey(k => k + 1);
+    } catch (err) {
+      showToast(getErrorMessage(err, 'Failed to mark package as delivered'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -163,9 +183,10 @@ const WarehouseStaffPortal = () => {
     setActionLoading(true);
     try {
       await warehouseApi.receiveReturn(returnId);
+      showToast('Return shipment received at dock!', 'success');
       setRefreshKey(k => k + 1);
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to mark return received');
+      showToast(getErrorMessage(err, 'Failed to mark return received'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -178,10 +199,11 @@ const WarehouseStaffPortal = () => {
     setActionLoading(true);
     try {
       await warehouseApi.performQcInspection(selectedReturnForQc.id, qcForm);
+      showToast(`QC Inspection recorded: ${qcForm.qcDecision}`, 'success');
       setSelectedReturnForQc(null);
       setRefreshKey(k => k + 1);
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to record QC inspection');
+      showToast(getErrorMessage(err, 'Failed to record QC inspection'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -596,6 +618,44 @@ const WarehouseStaffPortal = () => {
               ))}
               {allocations.filter(a => a.stage === 'READY_FOR_SHIPMENT').length === 0 && (
                 <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>No orders waiting for dispatch</div>
+              )}
+            </div>
+          </div>
+
+          {/* COLUMN 5: IN-TRANSIT & DELIVERED */}
+          <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', padding: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #334155', paddingBottom: '0.5rem' }}>
+              <span style={{ fontWeight: 800, color: '#38bdf8', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Truck size={16} /> 5. IN-TRANSIT ({allocations.filter(a => a.stage === 'SHIPPED').length})
+              </span>
+              <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>Step: Delivery</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {allocations.filter(a => a.stage === 'SHIPPED').map(alloc => (
+                <div key={alloc.id} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '10px', padding: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#94a3b8' }}>
+                    <span>Order: <strong style={{ color: '#cbd5e1' }}>{alloc.orderNumber}</strong></span>
+                    <span style={{ color: '#38bdf8', fontWeight: 700 }}>🚚 {alloc.carrier}</span>
+                  </div>
+
+                  <div style={{ margin: '0.5rem 0', fontSize: '0.82rem', color: '#cbd5e1' }}>
+                    <strong>{alloc.productTitle}</strong> (Qty: {alloc.allocatedQuantity})
+                    <div style={{ color: '#94a3b8', fontSize: '0.78rem', marginTop: '2px' }}>Tracking: {alloc.trackingNumber}</div>
+                    <div style={{ color: '#64748b', fontSize: '0.75rem', marginTop: '2px' }}>Customer: {alloc.customerName}</div>
+                  </div>
+
+                  <button
+                    onClick={() => handleDeliver(alloc.id)}
+                    className="btn btn-primary btn-sm"
+                    style={{ width: '100%', background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', borderColor: '#0284c7', color: '#fff', fontWeight: 800 }}
+                  >
+                    <CheckCircle2 size={14} /> Confirm Delivery
+                  </button>
+                </div>
+              ))}
+              {allocations.filter(a => a.stage === 'SHIPPED').length === 0 && (
+                <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>No orders currently in transit</div>
               )}
             </div>
           </div>
@@ -1140,7 +1200,10 @@ const WarehouseStaffPortal = () => {
 
             <form onSubmit={async (e) => {
               e.preventDefault();
-              if (!restockForm.productId) return alert('Select a product to restock');
+              if (!restockForm.productId) {
+                showToast('Please select a product to restock.', 'warning');
+                return;
+              }
               setActionLoading(true);
               try {
                 await warehouseApi.restock(selectedWarehouseId, {
@@ -1150,10 +1213,11 @@ const WarehouseStaffPortal = () => {
                   notes: restockForm.notes,
                   performedBy: user?.fullName || 'Warehouse Staff'
                 });
+                showToast('Inbound stock received and added to inventory!', 'success');
                 setShowRestockModal(false);
                 setRefreshKey(k => k + 1);
               } catch (err) {
-                alert(err.response?.data?.message || 'Failed to restock');
+                showToast(getErrorMessage(err, 'Failed to restock'), 'error');
               } finally {
                 setActionLoading(false);
               }

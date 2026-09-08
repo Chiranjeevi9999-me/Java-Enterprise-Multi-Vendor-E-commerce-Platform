@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Plus, AlertCircle } from 'lucide-react';
 import { productApi } from '../api';
+import { getErrorMessage } from '../api/axios';
 
 const AddProductModal = ({ categories, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -42,7 +43,7 @@ const AddProductModal = ({ categories, onClose, onSuccess }) => {
       onSuccess();
       onClose();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create product. Check vendor permissions.');
+      setError(getErrorMessage(err, 'Failed to create product listing. Check permissions and inputs.'));
     } finally {
       setSubmitting(false);
     }
@@ -71,7 +72,7 @@ const AddProductModal = ({ categories, onClose, onSuccess }) => {
             <input type="text" name="title" className="input-field" placeholder="e.g. Ultra HD Smart Monitor 27 inch" value={formData.title} onChange={handleChange} required />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="form-grid-2">
             <div className="input-group">
               <label className="input-label">Category *</label>
               <select name="categoryId" className="input-field" value={formData.categoryId} onChange={handleChange} required>
@@ -88,7 +89,7 @@ const AddProductModal = ({ categories, onClose, onSuccess }) => {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+          <div className="form-grid-3">
             <div className="input-group">
               <label className="input-label">Price (₹) *</label>
               <input type="number" step="0.01" name="price" className="input-field" placeholder="199.99" value={formData.price} onChange={handleChange} required />

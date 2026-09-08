@@ -331,6 +331,62 @@ public class WarehouseService {
     }
 
     @Transactional
+    public void cancelOrderAllocations(Order order) {
+        if (order == null || order.getId() == null) return;
+        List<OrderWarehouseAllocation> allocations = allocationRepository.findByOrderId(order.getId());
+        for (OrderWarehouseAllocation alloc : allocations) {
+            StockMovementStage currentStage = alloc.getStage();
+            if (currentStage == StockMovementStage.CANCELLED) {
+                continue;
+            }
+
+            Warehouse warehouse = alloc.getWarehouse();
+            Product product = alloc.getOrderItem() != null ? alloc.getOrderItem().getProduct() : null;
+            if (warehouse != null && product != null) {
+                Optional<WarehouseInventory> invOpt = inventoryRepository.findByWarehouseIdAndProductId(warehouse.getId(), product.getId());
+                if (invOpt.isPresent()) {
+                    WarehouseInventory inv = invOpt.get();
+                    int prevAvail = inv.getAvailableStock();
+                    int prevAlloc = inv.getAllocatedStock();
+                    int prevTotal = inv.getTotalStock();
+
+                    if (currentStage == StockMovementStage.ALLOCATED || currentStage == StockMovementStage.PICKED || currentStage == StockMovementStage.PACKED) {
+                        inv.deallocate(alloc.getAllocatedQuantity());
+                        inventoryRepository.save(inv);
+                    } else if (currentStage == StockMovementStage.READY_FOR_SHIPMENT || currentStage == StockMovementStage.SHIPPED) {
+                        inv.restock(alloc.getAllocatedQuantity());
+                        inventoryRepository.save(inv);
+                    }
+
+                    StockMovement movement = StockMovement.builder()
+                            .warehouse(warehouse)
+                            .product(product)
+                            .order(order)
+                            .orderItem(alloc.getOrderItem())
+                            .movementType(StockMovementType.ALLOCATION_RELEASED)
+                            .stage(StockMovementStage.CANCELLED)
+                            .quantity(alloc.getAllocatedQuantity())
+                            .previousAvailableStock(prevAvail)
+                            .newAvailableStock(inv.getAvailableStock())
+                            .previousAllocatedStock(prevAlloc)
+                            .newAllocatedStock(inv.getAllocatedStock())
+                            .previousTotalStock(prevTotal)
+                            .newTotalStock(inv.getTotalStock())
+                            .referenceNumber("CNCL-" + order.getOrderNumber())
+                            .notes("Stock allocation released due to order cancellation: " + order.getOrderNumber())
+                            .performedBy("System Lifecycle Engine")
+                            .build();
+                    stockMovementRepository.save(movement);
+                }
+            }
+
+            alloc.setStage(StockMovementStage.CANCELLED);
+            alloc.setNotes((alloc.getNotes() != null ? alloc.getNotes() + " | " : "") + "Order Cancelled.");
+            allocationRepository.save(alloc);
+        }
+    }
+
+    @Transactional
     public OrderWarehouseAllocationDTO manualAllocateOrderItem(ManualAllocationRequest request) {
         OrderItem orderItem = orderItemRepository.findById(request.getOrderItemId())
                 .orElseThrow(() -> new RuntimeException("OrderItem not found with ID: " + request.getOrderItemId()));
@@ -617,6 +673,50 @@ public class WarehouseService {
                 .referenceNumber(allocation.getTrackingNumber())
                 .notes("Package handed over to carrier " + allocation.getCarrier() + " for final delivery.")
                 .performedBy("Logistics Coordinator")
+                .build();
+        stockMovementRepository.save(movement);
+
+        return mapToAllocationDTO(saved);
+    }
+
+    // ==========================================
+    // 7b. Delivery / Customer Receipt Operation
+    // ==========================================
+
+    @Transactional
+    public OrderWarehouseAllocationDTO deliverShipment(Long allocationId) {
+        OrderWarehouseAllocation allocation = allocationRepository.findById(allocationId)
+                .orElseThrow(() -> new RuntimeException("Allocation not found with ID: " + allocationId));
+
+        if (allocation.getStage() != StockMovementStage.SHIPPED && allocation.getStage() != StockMovementStage.READY_FOR_SHIPMENT) {
+            throw new IllegalStateException("Cannot deliver item. Current stage is: " + allocation.getStage() + " (Expected: SHIPPED or READY_FOR_SHIPMENT)");
+        }
+
+        allocation.setStage(StockMovementStage.DELIVERED);
+        OrderWarehouseAllocation saved = allocationRepository.save(allocation);
+
+        // Update Order status to DELIVERED and payment status to PAID
+        Order order = allocation.getOrder();
+        List<OrderWarehouseAllocation> allOrderAllocs = allocationRepository.findByOrderId(order.getId());
+        boolean allDelivered = allOrderAllocs.stream().allMatch(a -> a.getStage() == StockMovementStage.DELIVERED);
+        if (allDelivered) {
+            order.setStatus(OrderStatus.DELIVERED);
+            order.setPaymentStatus(PaymentStatus.PAID);
+            orderRepository.save(order);
+        }
+
+        // Log Stock Movement
+        StockMovement movement = StockMovement.builder()
+                .warehouse(allocation.getWarehouse())
+                .product(allocation.getOrderItem().getProduct())
+                .order(allocation.getOrder())
+                .orderItem(allocation.getOrderItem())
+                .movementType(StockMovementType.SHIPMENT_DISPATCH)
+                .stage(StockMovementStage.DELIVERED)
+                .quantity(allocation.getAllocatedQuantity())
+                .referenceNumber(allocation.getTrackingNumber() != null ? allocation.getTrackingNumber() : order.getOrderNumber())
+                .notes("Package successfully delivered to customer address: " + order.getShippingAddress())
+                .performedBy("Delivery Courier Partner")
                 .build();
         stockMovementRepository.save(movement);
 

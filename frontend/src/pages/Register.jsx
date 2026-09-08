@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getErrorMessage } from '../api/axios';
 import { Store, User, Mail, Lock, Phone, AlertCircle, CheckCircle2, Eye, EyeOff, Building } from 'lucide-react';
 
 const Register = () => {
@@ -92,7 +93,7 @@ const Register = () => {
       }, 700);
 
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Registration failed. Email might already be in use.';
+      const msg = getErrorMessage(err, 'Registration failed. Email might already be in use.');
       setServerError(msg);
     }
   };
@@ -181,8 +182,8 @@ const Register = () => {
             {fieldErrors.fullName && <span className="field-error-text">{fieldErrors.fullName}</span>}
           </div>
 
-          {/* Email & Phone side-by-side */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          {/* Email & Phone side-by-side with responsive fallback */}
+          <div className="grid-2-to-1" style={{ gap: '1rem' }}>
             <div className="input-group">
               <label className="input-label">Email Address *</label>
               <div style={{ position: 'relative' }}>
@@ -222,8 +223,8 @@ const Register = () => {
             </div>
           </div>
 
-          {/* Password & Confirm Password side-by-side */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          {/* Password & Confirm Password side-by-side with responsive fallback */}
+          <div className="grid-2-to-1" style={{ gap: '1rem' }}>
             <div className="input-group">
               <label className="input-label">Password *</label>
               <div style={{ position: 'relative' }}>

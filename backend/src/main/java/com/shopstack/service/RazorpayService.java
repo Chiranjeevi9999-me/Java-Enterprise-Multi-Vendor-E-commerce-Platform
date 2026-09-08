@@ -81,9 +81,7 @@ public class RazorpayService {
             return false;
         }
 
-        if ("simulated_signature".equals(razorpaySignature) 
-                || razorpayOrderId.startsWith("order_mock_")
-                || razorpayOrderId.startsWith("COD-")) {
+        if ("simulated_signature".equals(razorpaySignature)) {
             return true;
         }
 

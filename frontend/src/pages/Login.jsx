@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getErrorMessage } from '../api/axios';
 import { Store, Lock, Mail, AlertCircle, ArrowRight, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 
 const Login = () => {
@@ -58,7 +59,7 @@ const Login = () => {
         }
       }, 500);
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Login failed. Please check your credentials and connection.';
+      const msg = getErrorMessage(err, 'Login failed. Please check your credentials and connection.');
       setServerError(msg);
     }
   };
@@ -189,7 +190,7 @@ const Login = () => {
               className="btn btn-secondary btn-sm"
               style={{ fontSize: '0.78rem', padding: '0.55rem', borderColor: '#818cf8', color: '#818cf8' }}
             >
-              📦 Warehouse Staff
+              📦 Staff (Hyd Hub)
             </button>
             <button
               type="button"
@@ -207,6 +208,15 @@ const Login = () => {
             >
               🛍️ Customer
             </button>
+          </div>
+
+          {/* Regional Staff Quick Switch */}
+          <div style={{ marginTop: '0.6rem', display: 'flex', gap: '0.4rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-subtle)', width: '100%', textAlign: 'center' }}>Staff Hubs:</span>
+            <button type="button" onClick={() => handleQuickDemo('staff.mum@shopstack.com', 'staff123')} className="btn btn-sm" style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', background: '#1e293b', color: '#94a3b8' }}>Mumbai</button>
+            <button type="button" onClick={() => handleQuickDemo('staff.del@shopstack.com', 'staff123')} className="btn btn-sm" style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', background: '#1e293b', color: '#94a3b8' }}>Delhi</button>
+            <button type="button" onClick={() => handleQuickDemo('staff.blr@shopstack.com', 'staff123')} className="btn btn-sm" style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', background: '#1e293b', color: '#94a3b8' }}>Bangalore</button>
+            <button type="button" onClick={() => handleQuickDemo('staff.kol@shopstack.com', 'staff123')} className="btn btn-sm" style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', background: '#1e293b', color: '#94a3b8' }}>Kolkata</button>
           </div>
         </div>
 

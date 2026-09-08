@@ -48,11 +48,11 @@ const ProductDetailModal = ({ product, onClose }) => {
         </div>
 
         {/* Details Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '2rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '1.5rem' }}>
           
           {/* Left Column: Image */}
           <div>
-            <div style={{ width: '100%', height: '320px', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: '#0f172a', border: '1px solid var(--border-color)', position: 'relative' }}>
+            <div style={{ width: '100%', height: '260px', maxHeight: '320px', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: '#0f172a', border: '1px solid var(--border-color)', position: 'relative' }}>
               <img
                 src={product.imageUrl}
                 alt={product.title}

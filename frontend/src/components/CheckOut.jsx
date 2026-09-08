@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { paymentApi, couponApi } from '../api';
+import { getErrorMessage } from '../api/axios';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   MapPin, Lock, ArrowLeft, RefreshCw, AlertTriangle, ShieldCheck, Check, 
@@ -57,6 +58,94 @@ const CheckOut = () => {
       .catch(() => setActiveOffers([]));
   }, []);
 
+  // Calculate Order Totals with Coupon Discounts
+  const calculateTotals = () => {
+    let originalTotal = 0;
+    let catalogSubtotal = 0;
+
+    cart.forEach(item => {
+      const p = item.product;
+      const currentPrice = p.discountPrice || p.price || 0;
+      const originalPrice = p.price || currentPrice;
+      catalogSubtotal += currentPrice * item.quantity;
+      originalTotal += originalPrice * item.quantity;
+    });
+
+    catalogSubtotal = Math.round(catalogSubtotal * 100) / 100;
+    originalTotal = Math.round(originalTotal * 100) / 100;
+    const catalogDiscount = Math.max(0, Math.round((originalTotal - catalogSubtotal) * 100) / 100);
+
+    let couponDiscount = 0;
+    if (appliedCoupon && appliedCoupon.discountAmount) {
+      couponDiscount = Math.min(appliedCoupon.discountAmount, catalogSubtotal);
+    }
+
+    const finalTotal = Math.max(0, Math.round((catalogSubtotal - couponDiscount) * 100) / 100);
+    const totalDiscount = Math.round((catalogDiscount + couponDiscount) * 100) / 100;
+
+    return {
+      originalTotal,
+      catalogSubtotal,
+      catalogDiscount,
+      couponDiscount,
+      finalTotal,
+      totalDiscount
+    };
+  };
+
+  const { originalTotal, catalogSubtotal, catalogDiscount, couponDiscount, finalTotal, totalDiscount } = calculateTotals();
+
+  // Coupon Handlers
+  const handleApplyCoupon = async (codeToApply) => {
+    const code = (codeToApply || couponInput).trim().toUpperCase();
+    if (!code) {
+      setCouponError('Please enter a coupon code.');
+      return;
+    }
+
+    setCouponLoading(true);
+    setCouponError('');
+
+    try {
+      const res = await couponApi.validate({
+        code,
+        orderAmount: catalogSubtotal
+      });
+
+      if (res.data && res.data.valid) {
+        setAppliedCoupon(res.data);
+        setCouponInput('');
+        setCouponError('');
+      } else {
+        setCouponError(res.data?.message || 'Invalid or expired coupon code.');
+        setAppliedCoupon(null);
+      }
+    } catch (err) {
+      const msg = getErrorMessage(err, 'Failed to validate coupon code.');
+      setCouponError(msg);
+      setAppliedCoupon(null);
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setCouponError('');
+  };
+
+  const handleRetryPayment = () => {
+    setPaymentState('IDLE');
+    setPaymentDetails({ amount: 0, paymentId: '', orderId: '', errorReason: '' });
+    setError('');
+  };
+
+  const handleCloseModal = () => {
+    setPaymentState('IDLE');
+    setPaymentDetails({ amount: 0, paymentId: '', orderId: '', errorReason: '' });
+  };
+
   // Payment Processing State: 'IDLE' | 'PROCESSING' | 'SUCCESS' | 'FAILED'
   const [paymentState, setPaymentState] = useState('IDLE');
   const [paymentDetails, setPaymentDetails] = useState({
@@ -94,118 +183,59 @@ const CheckOut = () => {
 
   const [selectedBank, setSelectedBank] = useState('HDFC');
 
+  // Address Field Errors
+  const [addressFieldErrors, setAddressFieldErrors] = useState({});
+
+  const validateAddressForm = () => {
+    const errors = {};
+    if (!formData.fullName.trim()) {
+      errors.fullName = 'Full Name is required.';
+    } else if (formData.fullName.trim().length < 2) {
+      errors.fullName = 'Name must be at least 2 characters.';
+    }
+
+    const cleanPhone = formData.phoneNumber.replace(/[\s\-()]/g, '');
+    if (!formData.phoneNumber.trim()) {
+      errors.phoneNumber = 'Phone Number is required.';
+    } else if (!/^\+?[0-9]{10,13}$/.test(cleanPhone)) {
+      errors.phoneNumber = 'Please enter a valid 10-digit phone number.';
+    }
+
+    if (!formData.streetAddress.trim()) {
+      errors.streetAddress = 'Street Address / Flat No is required.';
+    }
+
+    if (!formData.city.trim()) {
+      errors.city = 'City is required.';
+    }
+
+    if (!formData.state.trim()) {
+      errors.state = 'State is required.';
+    }
+
+    const cleanPin = formData.pincode.trim();
+    if (!cleanPin) {
+      errors.pincode = 'Pincode is required.';
+    } else if (!/^[0-9]{6}$/.test(cleanPin)) {
+      errors.pincode = 'Please enter a valid 6-digit postal pincode.';
+    }
+
+    setAddressFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleAddressChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  // Card input formatters
-  const handleCardNumberChange = (e) => {
-    let raw = e.target.value.replace(/\D/g, '').slice(0, 16);
-    let formatted = raw.match(/.{1,4}/g)?.join(' ') || raw;
-    setCardData({ ...cardData, cardNumber: formatted });
-  };
-
-  const handleExpiryChange = (e) => {
-    let raw = e.target.value.replace(/\D/g, '').slice(0, 4);
-    if (raw.length >= 3) {
-      raw = raw.slice(0, 2) + '/' + raw.slice(2, 4);
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (addressFieldErrors[name]) {
+      setAddressFieldErrors(prev => ({ ...prev, [name]: null }));
     }
-    setCardData({ ...cardData, expiryDate: raw });
-  };
-
-  const handleCvvChange = (e) => {
-    const raw = e.target.value.replace(/\D/g, '').slice(0, 4);
-    setCardData({ ...cardData, cvv: raw });
-  };
-
-  // Calculate Order Totals with Coupon Discount
-  const calculateTotals = () => {
-    let originalTotal = 0;
-    let finalTotal = 0;
-    cart.forEach(item => {
-      const p = item.product;
-      const price = p.discountPrice || p.price || 0;
-      const original = p.price || price; 
-      finalTotal += price * item.quantity;
-      originalTotal += original * item.quantity;
-    });
-
-    const roundedOriginal = Math.round(originalTotal * 100) / 100;
-    const roundedCartFinal = Math.round(finalTotal * 100) / 100;
-    const catalogDiscount = Math.round((roundedOriginal - roundedCartFinal) * 100) / 100;
-    const couponDiscount = appliedCoupon ? Math.round(appliedCoupon.discountAmount * 100) / 100 : 0.0;
-    const netPayable = Math.max(0.0, Math.round((roundedCartFinal - couponDiscount) * 100) / 100);
-
-    return { 
-      originalTotal: roundedOriginal, 
-      cartFinalTotal: roundedCartFinal, 
-      catalogDiscount,
-      couponDiscount,
-      finalTotal: netPayable, 
-      totalDiscount: Math.round((catalogDiscount + couponDiscount) * 100) / 100
-    };
-  };
-
-  const { originalTotal, cartFinalTotal, catalogDiscount, couponDiscount, finalTotal, totalDiscount } = calculateTotals();
-
-  const handleApplyCoupon = async (codeToUse) => {
-    const targetCode = (codeToUse || couponInput || '').trim();
-    if (!targetCode) {
-      setCouponError('Please enter a coupon code.');
-      return;
-    }
-
-    setCouponLoading(true);
-    setCouponError('');
-
-    try {
-      const res = await couponApi.validate({
-        couponCode: targetCode,
-        orderAmount: cartFinalTotal,
-        userId: user?.id || null
-      });
-
-      if (res.data.valid) {
-        setAppliedCoupon(res.data);
-        setCouponInput(res.data.couponCode);
-        setCouponError('');
-      } else {
-        setAppliedCoupon(null);
-        setCouponError(res.data.message || 'Invalid coupon code.');
-      }
-    } catch (err) {
-      const msg = err.response?.data?.message || 'Failed to validate coupon code.';
-      setCouponError(msg);
-      setAppliedCoupon(null);
-    } finally {
-      setCouponLoading(false);
-    }
-  };
-
-  const handleRemoveCoupon = () => {
-    setAppliedCoupon(null);
-    setCouponInput('');
-    setCouponError('');
-  };
-
-  const handleCloseModal = () => {
-    setPaymentState('IDLE');
-    setLoading(false);
-  };
-
-  const handleRetryPayment = () => {
-    setPaymentState('IDLE');
-    setLoading(false);
-    setError('');
-    setTimeout(() => {
-      handlePaymentSubmit();
-    }, 50);
   };
 
   const handlePaymentSubmit = async () => {
     // Validate delivery address fields
-    if (!formData.fullName.trim() || !formData.phoneNumber.trim() || !formData.streetAddress.trim() || !formData.city.trim() || !formData.state.trim() || !formData.pincode.trim()) {
-      setError('Please fill in all delivery address fields marked with (*).');
+    if (!validateAddressForm()) {
+      setError('Please resolve the highlighted delivery address errors before proceeding.');
       return;
     }
 
@@ -235,7 +265,7 @@ const CheckOut = () => {
           navigate('/orders', { state: { message: 'Order Placed Successfully via Cash on Delivery!' } });
         }, 2500);
       } catch (err) {
-        const errMsg = err.response?.data?.message || err.message || 'COD Order creation failed. Please try again.';
+        const errMsg = getErrorMessage(err, 'COD Order creation failed. Please try again.');
         setError(errMsg);
         setLoading(false);
       }
@@ -311,7 +341,7 @@ const CheckOut = () => {
               navigate('/orders', { state: { message: 'Payment Successful! Your order has been placed in Test Mode.' } });
             }, 2000);
           } catch (verifyErr) {
-            const verifyMsg = verifyErr.response?.data?.message || verifyErr.message || 'Payment verification failed.';
+            const verifyMsg = getErrorMessage(verifyErr, 'Payment verification failed.');
             setPaymentDetails({
               amount: finalTotal,
               paymentId: simulatedPaymentId,
@@ -364,7 +394,7 @@ const CheckOut = () => {
                   navigate('/orders', { state: { message: 'Payment Verified Successfully! Your order has been placed.' } });
                 }, 2000);
               } catch (verifyErr) {
-                const verifyMsg = verifyErr.response?.data?.message || verifyErr.message || 'Payment signature verification failed.';
+                const verifyMsg = getErrorMessage(verifyErr, 'Payment signature verification failed.');
                 setPaymentDetails({
                   amount: finalTotal,
                   paymentId: response.razorpay_payment_id || '',
@@ -416,7 +446,7 @@ const CheckOut = () => {
         runSimulationFlow();
       }
     } catch (err) {
-      const errMsg = err.response?.data?.message || err.message || 'Order creation failed. Please try again.';
+      const errMsg = getErrorMessage(err, 'Order creation failed. Please try again.');
       setPaymentDetails({
         amount: finalTotal,
         paymentId: '',
@@ -495,7 +525,7 @@ const CheckOut = () => {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      <div className="cart-checkout-layout" style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         
         {/* Left Column: Delivery Address & Payment Options */}
         <div style={{ flex: '1 1 540px', display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
@@ -508,7 +538,7 @@ const CheckOut = () => {
             </h2>
 
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-              <div className="input-group" style={{ flex: '1 1 240px' }}>
+              <div className="input-group" style={{ flex: '1 1 240px', marginBottom: 0 }}>
                 <label className="input-label" style={{ color: '#cbd5e1', fontSize: '0.88rem', fontWeight: 600 }}>Full Name *</label>
                 <input 
                   type="text" 
@@ -516,12 +546,13 @@ const CheckOut = () => {
                   value={formData.fullName} 
                   onChange={handleAddressChange} 
                   placeholder="e.g. John Doe"
-                  className="input-field" 
-                  style={{ background: '#1f2937', color: '#f8fafc', border: '1px solid #374151' }} 
+                  className={`input-field ${addressFieldErrors.fullName ? 'input-error' : ''}`}
+                  style={{ background: '#1f2937', color: '#f8fafc', border: addressFieldErrors.fullName ? '1px solid #ef4444' : '1px solid #374151' }} 
                   required 
                 />
+                {addressFieldErrors.fullName && <span className="field-error-text">{addressFieldErrors.fullName}</span>}
               </div>
-              <div className="input-group" style={{ flex: '1 1 240px' }}>
+              <div className="input-group" style={{ flex: '1 1 240px', marginBottom: 0 }}>
                 <label className="input-label" style={{ color: '#cbd5e1', fontSize: '0.88rem', fontWeight: 600 }}>Phone Number *</label>
                 <input 
                   type="tel" 
@@ -529,10 +560,11 @@ const CheckOut = () => {
                   value={formData.phoneNumber} 
                   onChange={handleAddressChange} 
                   placeholder="e.g. 9876543210"
-                  className="input-field" 
-                  style={{ background: '#1f2937', color: '#f8fafc', border: '1px solid #374151' }} 
+                  className={`input-field ${addressFieldErrors.phoneNumber ? 'input-error' : ''}`}
+                  style={{ background: '#1f2937', color: '#f8fafc', border: addressFieldErrors.phoneNumber ? '1px solid #ef4444' : '1px solid #374151' }} 
                   required 
                 />
+                {addressFieldErrors.phoneNumber && <span className="field-error-text">{addressFieldErrors.phoneNumber}</span>}
               </div>
             </div>
 
@@ -544,14 +576,15 @@ const CheckOut = () => {
                 value={formData.streetAddress} 
                 onChange={handleAddressChange} 
                 placeholder="e.g. 102, Green Valley Apartments, MG Road"
-                className="input-field" 
-                style={{ background: '#1f2937', color: '#f8fafc', border: '1px solid #374151' }} 
+                className={`input-field ${addressFieldErrors.streetAddress ? 'input-error' : ''}`}
+                style={{ background: '#1f2937', color: '#f8fafc', border: addressFieldErrors.streetAddress ? '1px solid #ef4444' : '1px solid #374151' }} 
                 required 
               />
+              {addressFieldErrors.streetAddress && <span className="field-error-text">{addressFieldErrors.streetAddress}</span>}
             </div>
 
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-              <div className="input-group" style={{ flex: '1 1 160px' }}>
+              <div className="input-group" style={{ flex: '1 1 160px', marginBottom: 0 }}>
                 <label className="input-label" style={{ color: '#cbd5e1', fontSize: '0.88rem', fontWeight: 600 }}>City *</label>
                 <input 
                   type="text" 
@@ -559,12 +592,13 @@ const CheckOut = () => {
                   value={formData.city} 
                   onChange={handleAddressChange} 
                   placeholder="e.g. Bangalore"
-                  className="input-field" 
-                  style={{ background: '#1f2937', color: '#f8fafc', border: '1px solid #374151' }} 
+                  className={`input-field ${addressFieldErrors.city ? 'input-error' : ''}`}
+                  style={{ background: '#1f2937', color: '#f8fafc', border: addressFieldErrors.city ? '1px solid #ef4444' : '1px solid #374151' }} 
                   required 
                 />
+                {addressFieldErrors.city && <span className="field-error-text">{addressFieldErrors.city}</span>}
               </div>
-              <div className="input-group" style={{ flex: '1 1 160px' }}>
+              <div className="input-group" style={{ flex: '1 1 160px', marginBottom: 0 }}>
                 <label className="input-label" style={{ color: '#cbd5e1', fontSize: '0.88rem', fontWeight: 600 }}>State *</label>
                 <input 
                   type="text" 
@@ -572,12 +606,13 @@ const CheckOut = () => {
                   value={formData.state} 
                   onChange={handleAddressChange} 
                   placeholder="e.g. Karnataka"
-                  className="input-field" 
-                  style={{ background: '#1f2937', color: '#f8fafc', border: '1px solid #374151' }} 
+                  className={`input-field ${addressFieldErrors.state ? 'input-error' : ''}`}
+                  style={{ background: '#1f2937', color: '#f8fafc', border: addressFieldErrors.state ? '1px solid #ef4444' : '1px solid #374151' }} 
                   required 
                 />
+                {addressFieldErrors.state && <span className="field-error-text">{addressFieldErrors.state}</span>}
               </div>
-              <div className="input-group" style={{ flex: '1 1 140px' }}>
+              <div className="input-group" style={{ flex: '1 1 140px', marginBottom: 0 }}>
                 <label className="input-label" style={{ color: '#cbd5e1', fontSize: '0.88rem', fontWeight: 600 }}>Pincode *</label>
                 <input 
                   type="text" 
@@ -585,10 +620,11 @@ const CheckOut = () => {
                   value={formData.pincode} 
                   onChange={handleAddressChange} 
                   placeholder="e.g. 560001" 
-                  className="input-field" 
-                  style={{ background: '#1f2937', color: '#f8fafc', border: '1px solid #374151' }} 
+                  className={`input-field ${addressFieldErrors.pincode ? 'input-error' : ''}`}
+                  style={{ background: '#1f2937', color: '#f8fafc', border: addressFieldErrors.pincode ? '1px solid #ef4444' : '1px solid #374151' }} 
                   required 
                 />
+                {addressFieldErrors.pincode && <span className="field-error-text">{addressFieldErrors.pincode}</span>}
               </div>
             </div>
           </div>
@@ -889,7 +925,7 @@ const CheckOut = () => {
         </div>
 
         {/* Right Column: Order Summary & Checkout Button */}
-        <div style={{ 
+        <div className="cart-checkout-sidebar" style={{ 
           width: '100%', 
           maxWidth: '380px', 
           background: '#111827', 

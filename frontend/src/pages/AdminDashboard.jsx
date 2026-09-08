@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { adminApi, categoryApi, vendorApi, commissionApi, couponApi } from '../api';
+import { getErrorMessage } from '../api/axios';
 import {
   ShieldCheck, Store, Users, Package, Check, X, PlusCircle, DollarSign,
   ShoppingBag, Lock, Unlock, TrendingUp, BarChart3, Activity,
@@ -572,7 +573,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* Primary Navigation Tabs */}
-      <div style={{
+      <div className="horizontal-scroll-ribbon" style={{
         display: 'flex',
         gap: '0.5rem',
         overflowX: 'auto',
@@ -617,7 +618,7 @@ const AdminDashboard = () => {
           className={`btn ${activeTab === 'WAREHOUSES' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
           style={{ whiteSpace: 'nowrap', border: activeTab === 'WAREHOUSES' ? '1px solid #8b5cf6' : undefined, background: activeTab === 'WAREHOUSES' ? 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)' : undefined, color: activeTab === 'WAREHOUSES' ? '#fff' : undefined }}
         >
-          <Layers size={15} /> Warehouse & Fulfillment (Task 4)
+          <Layers size={15} /> Warehouse & Fulfillment
         </button>
 
         <button

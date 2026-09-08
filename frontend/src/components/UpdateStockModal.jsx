@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Package, AlertTriangle, CheckCircle2, Save } from 'lucide-react';
 import { productApi } from '../api';
+import { getErrorMessage } from '../api/axios';
 
 const UpdateStockModal = ({ product, onClose, onSuccess }) => {
   const [stockQuantity, setStockQuantity] = useState(product?.stockQuantity ?? 0);
@@ -26,8 +27,7 @@ const UpdateStockModal = ({ product, onClose, onSuccess }) => {
       if (onSuccess) onSuccess();
       onClose();
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || 'Failed to update stock quantity.';
-      setError(msg);
+      setError(getErrorMessage(err, 'Failed to update stock quantity.'));
     } finally {
       setLoading(false);
     }

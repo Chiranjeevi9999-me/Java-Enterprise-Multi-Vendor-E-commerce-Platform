@@ -156,6 +156,12 @@ public class WarehouseController {
         return ResponseEntity.ok(warehouseService.dispatchShipment(id));
     }
 
+    @PostMapping("/allocations/{id}/deliver")
+    @PreAuthorize("hasAnyRole('ADMIN', 'WAREHOUSE_STAFF', 'VENDOR')")
+    public ResponseEntity<OrderWarehouseAllocationDTO> deliverItem(@PathVariable Long id) {
+        return ResponseEntity.ok(warehouseService.deliverShipment(id));
+    }
+
     // ==========================================
     // 5. Customer Returns & QC Inspection Endpoints
     // ==========================================

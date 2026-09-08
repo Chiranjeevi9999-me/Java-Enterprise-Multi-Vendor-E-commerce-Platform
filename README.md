@@ -124,7 +124,7 @@ npm install
 npm run dev
 ```
 
-Frontend application runs on: `http://localhost:5173`
+Frontend application runs on: `http://localhost:3000`
 
 ### Building Frontend for Production
 

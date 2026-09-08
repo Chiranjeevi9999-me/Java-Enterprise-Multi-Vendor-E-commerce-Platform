@@ -645,7 +645,21 @@ public class DataInitializer implements CommandLineRunner {
                 .active(true)
                 .build();
 
-        warehouseRepository.saveAll(List.of(whHyd, whMum, whBlr, whDel));
+        Warehouse whKol = Warehouse.builder()
+                .code("WH-KOL-01")
+                .name("Eastern Regional Logistics Depot")
+                .address("Taratala Logistics Park, Dock 4")
+                .city("Kolkata")
+                .state("West Bengal")
+                .country("India")
+                .pincode("700088")
+                .contactPhone("+91 33 2490 5500")
+                .contactEmail("kol-hub@shopstack.com")
+                .capacity(55000)
+                .active(true)
+                .build();
+
+        warehouseRepository.saveAll(List.of(whHyd, whMum, whBlr, whDel, whKol));
 
         // 11b. Seed Warehouse Staff Users assigned to regional hubs
         User staffHyd = User.builder()
@@ -688,13 +702,25 @@ public class DataInitializer implements CommandLineRunner {
                 .enabled(true)
                 .build();
 
-        userRepository.saveAll(List.of(staffHyd, staffBlr, staffMum, staffDel));
+        User staffKol = User.builder()
+                .email("staff.kol@shopstack.com")
+                .password(passwordEncoder.encode("staff123"))
+                .fullName("Subhash Ghosh (Kolkata Staff)")
+                .phoneNumber("+91 33 2490 1100")
+                .role(Role.WAREHOUSE_STAFF)
+                .assignedWarehouse(whKol)
+                .enabled(true)
+                .build();
+
+        userRepository.saveAll(List.of(staffHyd, staffBlr, staffMum, staffDel, staffKol));
 
         // 12. Seed Warehouse Inventories for Catalog Products
         WarehouseInventory invP1Hyd = WarehouseInventory.builder()
                 .warehouse(whHyd).product(p1).totalStock(25).allocatedStock(0).availableStock(25).damagedStock(2).aisleLocation("Aisle 02, Bay B-04").minThreshold(8).lastRestockedAt(now.minusDays(7)).build();
         WarehouseInventory invP1Mum = WarehouseInventory.builder()
                 .warehouse(whMum).product(p1).totalStock(20).allocatedStock(0).availableStock(20).damagedStock(0).aisleLocation("Aisle 01, Bay A-11").minThreshold(5).lastRestockedAt(now.minusDays(6)).build();
+        WarehouseInventory invP1Kol = WarehouseInventory.builder()
+                .warehouse(whKol).product(p1).totalStock(15).allocatedStock(0).availableStock(15).damagedStock(0).aisleLocation("Aisle 03, Bay C-02").minThreshold(5).lastRestockedAt(now.minusDays(5)).build();
 
         WarehouseInventory invP2Hyd = WarehouseInventory.builder()
                 .warehouse(whHyd).product(p2).totalStock(8).allocatedStock(0).availableStock(8).damagedStock(0).aisleLocation("Aisle 04, Secure Vault 2").minThreshold(3).lastRestockedAt(now.minusDays(10)).build();
@@ -710,6 +736,8 @@ public class DataInitializer implements CommandLineRunner {
                 .warehouse(whHyd).product(p4).totalStock(15).allocatedStock(0).availableStock(15).damagedStock(0).aisleLocation("Aisle 03, Glass Bay G-01").minThreshold(5).lastRestockedAt(now.minusDays(12)).build();
         WarehouseInventory invP4Blr = WarehouseInventory.builder()
                 .warehouse(whBlr).product(p4).totalStock(10).allocatedStock(0).availableStock(10).damagedStock(0).aisleLocation("Aisle 03, Glass Bay G-04").minThreshold(4).lastRestockedAt(now.minusDays(9)).build();
+        WarehouseInventory invP4Kol = WarehouseInventory.builder()
+                .warehouse(whKol).product(p4).totalStock(12).allocatedStock(0).availableStock(12).damagedStock(0).aisleLocation("Aisle 02, Glass Bay G-02").minThreshold(4).lastRestockedAt(now.minusDays(7)).build();
 
         WarehouseInventory invP5Mum = WarehouseInventory.builder()
                 .warehouse(whMum).product(p5).totalStock(40).allocatedStock(0).availableStock(40).damagedStock(0).aisleLocation("Aisle 08, Rack E-14").minThreshold(12).lastRestockedAt(now.minusDays(3)).build();
@@ -717,7 +745,7 @@ public class DataInitializer implements CommandLineRunner {
                 .warehouse(whDel).product(p5).totalStock(20).allocatedStock(0).availableStock(20).damagedStock(0).aisleLocation("Aisle 07, Rack F-05").minThreshold(6).lastRestockedAt(now.minusDays(4)).build();
 
         warehouseInventoryRepository.saveAll(List.of(
-                invP1Hyd, invP1Mum, invP2Hyd, invP2Del, invP3Blr, invP3Mum, invP4Hyd, invP4Blr, invP5Mum, invP5Del
+                invP1Hyd, invP1Mum, invP1Kol, invP2Hyd, invP2Del, invP3Blr, invP3Mum, invP4Hyd, invP4Blr, invP4Kol, invP5Mum, invP5Del
         ));
 
         // 13. Seed Order Warehouse Allocations across fulfillment stages

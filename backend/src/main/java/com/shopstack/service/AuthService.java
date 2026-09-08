@@ -116,13 +116,13 @@ public class AuthService {
     }
 
     public Map<String, String> forgotPassword(String email) {
-        if (!userRepository.existsByEmail(email)) {
-            throw new RuntimeException("If this email is registered, you will receive a reset link shortly.");
+        // Safe handling: Always return user-friendly message without leaking email existence
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("Email is required.");
         }
         
         // Placeholder for actual email service integration
-        // Here we would normally generate a token, save it, and email it.
-        
+        // In production, token would be generated and dispatched here if user exists
         return Map.of("message", "If this email is registered, you will receive a reset link shortly.");
     }
 }

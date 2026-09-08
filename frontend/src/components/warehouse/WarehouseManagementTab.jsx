@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { warehouseApi, productApi, orderApi } from '../../api';
+import { useCart } from '../../context/CartContext';
+import { warehouseApi, productApi, orderApi, adminApi } from '../../api';
+import { getErrorMessage } from '../../api/axios';
 import {
   Layers, Package, Truck, CheckCircle2, Clock, AlertTriangle, ArrowRight,
   RefreshCw, Plus, Search, Filter, MapPin, Box, ShieldCheck, FileText,
@@ -9,6 +11,7 @@ import {
 } from 'lucide-react';
 
 const WarehouseManagementTab = () => {
+  const { showToast } = useCart();
   // Sub-tabs: 'PIPELINE' | 'RETURNS_APPROVAL' | 'VENDOR_TRANSFER' | 'INVENTORY' | 'WAREHOUSES' | 'MOVEMENTS' | 'SIMULATOR'
   const [subTab, setSubTab] = useState('PIPELINE');
 
@@ -25,6 +28,7 @@ const WarehouseManagementTab = () => {
   const [movements, setMovements] = useState([]);
   const [products, setProducts] = useState([]);
   const [returnsList, setReturnsList] = useState([]);
+  const [orders, setOrders] = useState([]);
 
   // Filter states
   const [pipelineWarehouseFilter, setPipelineWarehouseFilter] = useState('ALL');
@@ -32,6 +36,15 @@ const WarehouseManagementTab = () => {
   const [inventoryWarehouseFilter, setInventoryWarehouseFilter] = useState('ALL');
   const [movementStageFilter, setMovementStageFilter] = useState('ALL');
   const [movementSearch, setMovementSearch] = useState('');
+
+  // Manual Allocation Modal State
+  const [showManualAllocateModal, setShowManualAllocateModal] = useState(false);
+  const [manualAllocateForm, setManualAllocateForm] = useState({
+    orderItemId: '',
+    warehouseId: '',
+    notes: 'Manual warehouse allocation assigned by Administrator'
+  });
+  const [allocateLoading, setAllocateLoading] = useState(false);
 
   // Return Review Modal State
   const [selectedReturnForReview, setSelectedReturnForReview] = useState(null);
@@ -104,14 +117,15 @@ const WarehouseManagementTab = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [analyticsRes, warehousesRes, inventoryRes, allocationsRes, movementsRes, productsRes, returnsRes] = await Promise.all([
+      const [analyticsRes, warehousesRes, inventoryRes, allocationsRes, movementsRes, productsRes, returnsRes, ordersRes] = await Promise.all([
         warehouseApi.getAnalyticsSummary().catch(() => ({ data: null })),
         warehouseApi.getAll().catch(() => ({ data: [] })),
         warehouseApi.getAllInventory().catch(() => ({ data: [] })),
         warehouseApi.getAllocations().catch(() => ({ data: [] })),
         warehouseApi.getStockMovements().catch(() => ({ data: [] })),
         productApi.getAll({ size: 50 }).catch(() => ({ data: { content: [] } })),
-        warehouseApi.getAllReturns().catch(() => ({ data: [] }))
+        warehouseApi.getAllReturns().catch(() => ({ data: [] })),
+        adminApi.getAllOrders().catch(() => ({ data: { content: [] } }))
       ]);
 
       setAnalytics(analyticsRes.data);
@@ -121,6 +135,7 @@ const WarehouseManagementTab = () => {
       setMovements(movementsRes.data || []);
       setProducts(productsRes.data?.content || productsRes.data || []);
       setReturnsList(returnsRes.data || []);
+      setOrders(ordersRes.data?.content || ordersRes.data || []);
     } catch (err) {
       console.error('Failed to load warehouse data:', err);
     } finally {
@@ -135,16 +150,41 @@ const WarehouseManagementTab = () => {
   // Refresh handler
   const handleRefresh = () => setRefreshKey(prev => prev + 1);
 
+  // Manual Allocation Operation
+  const handleManualAllocateSubmit = async (e) => {
+    e.preventDefault();
+    if (!manualAllocateForm.orderItemId || !manualAllocateForm.warehouseId) {
+      showToast('Please select both an Order Item and a Target Warehouse.', 'warning');
+      return;
+    }
+    setAllocateLoading(true);
+    try {
+      await warehouseApi.manualAllocate({
+        orderItemId: Number(manualAllocateForm.orderItemId),
+        warehouseId: Number(manualAllocateForm.warehouseId),
+        notes: manualAllocateForm.notes
+      });
+      showToast('Order item successfully allocated to regional warehouse hub!', 'success');
+      setShowManualAllocateModal(false);
+      handleRefresh();
+    } catch (err) {
+      showToast(getErrorMessage(err, 'Failed to allocate order to warehouse.'), 'error');
+    } finally {
+      setAllocateLoading(false);
+    }
+  };
+
   // Pick Operation
   const handleConfirmPick = async () => {
     if (!selectedAllocationForPick) return;
     setActionLoading(true);
     try {
       await warehouseApi.pickItem(selectedAllocationForPick.id, pickForm);
+      showToast('Pick operation completed successfully!', 'success');
       setSelectedAllocationForPick(null);
       handleRefresh();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to complete pick operation.');
+      showToast(getErrorMessage(err, 'Failed to complete pick operation.'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -156,10 +196,11 @@ const WarehouseManagementTab = () => {
     setActionLoading(true);
     try {
       await warehouseApi.packItem(selectedAllocationForPack.id, packForm);
+      showToast('Pack operation completed and parcel sealed!', 'success');
       setSelectedAllocationForPack(null);
       handleRefresh();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to complete pack operation.');
+      showToast(getErrorMessage(err, 'Failed to complete pack operation.'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -171,10 +212,11 @@ const WarehouseManagementTab = () => {
     setActionLoading(true);
     try {
       await warehouseApi.prepareShipment(selectedAllocationForShip.id, shipForm);
+      showToast('Shipment prepared and tracking assigned!', 'success');
       setSelectedAllocationForShip(null);
       handleRefresh();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to prepare shipment.');
+      showToast(getErrorMessage(err, 'Failed to prepare shipment.'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -182,13 +224,27 @@ const WarehouseManagementTab = () => {
 
   // Dispatch Operation
   const handleDispatch = async (allocationId) => {
-    if (!window.confirm('Dispatch this package to the courier partner for final delivery?')) return;
     setActionLoading(true);
     try {
       await warehouseApi.dispatchItem(allocationId);
+      showToast('Package handed over to carrier dispatch truck!', 'success');
       handleRefresh();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to dispatch shipment.');
+      showToast(getErrorMessage(err, 'Failed to dispatch shipment.'), 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Deliver Operation
+  const handleDeliver = async (allocationId) => {
+    setActionLoading(true);
+    try {
+      await warehouseApi.deliverItem(allocationId);
+      showToast('Package delivery confirmed!', 'success');
+      handleRefresh();
+    } catch (err) {
+      showToast(getErrorMessage(err, 'Failed to confirm delivery.'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -198,7 +254,7 @@ const WarehouseManagementTab = () => {
   const handleRestockSubmit = async (e) => {
     e.preventDefault();
     if (!restockForm.warehouseId || !restockForm.productId) {
-      alert('Please select both a warehouse and a product to restock.');
+      showToast('Please select both a warehouse and a product to restock.', 'warning');
       return;
     }
     setActionLoading(true);
@@ -210,10 +266,11 @@ const WarehouseManagementTab = () => {
         notes: restockForm.notes,
         performedBy: restockForm.performedBy
       });
+      showToast('Inventory restocked successfully!', 'success');
       setShowRestockModal(false);
       handleRefresh();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to restock inventory.');
+      showToast(getErrorMessage(err, 'Failed to restock inventory.'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -226,14 +283,16 @@ const WarehouseManagementTab = () => {
     try {
       if (editingWarehouse) {
         await warehouseApi.update(editingWarehouse.id, warehouseForm);
+        showToast('Warehouse details updated!', 'success');
       } else {
         await warehouseApi.create(warehouseForm);
+        showToast('New regional warehouse facility created!', 'success');
       }
       setShowWarehouseModal(false);
       setEditingWarehouse(null);
       handleRefresh();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to save warehouse.');
+      showToast(getErrorMessage(err, 'Failed to save warehouse.'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -250,9 +309,9 @@ const WarehouseManagementTab = () => {
       });
       setSelectedReturnForReview(null);
       handleRefresh();
-      alert(approved ? 'Return approved! Product routed to regional warehouse for QC inspection.' : 'Return request rejected.');
+      showToast(approved ? 'Return approved! Product routed to regional warehouse for QC inspection.' : 'Return request rejected.', approved ? 'success' : 'info');
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to review return request.');
+      showToast(getErrorMessage(err, 'Failed to review return request.'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -262,7 +321,7 @@ const WarehouseManagementTab = () => {
   const handleVendorTransferSubmit = async (e) => {
     e.preventDefault();
     if (!vendorTransferForm.productId || !vendorTransferForm.warehouseId) {
-      alert('Please select both a product and destination warehouse.');
+      showToast('Please select both a product and destination warehouse.', 'warning');
       return;
     }
     setActionLoading(true);
@@ -277,9 +336,9 @@ const WarehouseManagementTab = () => {
       });
       setShowVendorTransferModal(false);
       handleRefresh();
-      alert('Vendor stock successfully distributed to target warehouse hub!');
+      showToast('Vendor stock successfully distributed to target warehouse hub!', 'success');
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to transfer vendor stock.');
+      showToast(getErrorMessage(err, 'Failed to transfer vendor stock.'), 'error');
     } finally {
       setActionLoading(false);
     }
@@ -289,9 +348,10 @@ const WarehouseManagementTab = () => {
   const handleToggleWarehouseStatus = async (id) => {
     try {
       await warehouseApi.toggleStatus(id);
+      showToast('Warehouse active status toggled.', 'info');
       handleRefresh();
     } catch (err) {
-      alert('Failed to toggle warehouse status.');
+      showToast('Failed to toggle warehouse status.', 'error');
     }
   };
 
@@ -480,7 +540,7 @@ const WarehouseManagementTab = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.25rem', position: 'relative', zIndex: 1 }}>
           <div>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(139, 92, 246, 0.25)', border: '1px solid rgba(139, 92, 246, 0.4)', padding: '0.35rem 0.85rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, color: '#c4b5fd', marginBottom: '0.75rem' }}>
-              <Layers size={14} /> Task 4 Enterprise Logistics & Warehouse Hub
+              <Layers size={14} /> Enterprise Logistics & Warehouse Hub
             </div>
             <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', margin: 0 }}>
               Warehouse Allocation & Fulfillment Engine
@@ -497,6 +557,22 @@ const WarehouseManagementTab = () => {
               style={{ background: 'rgba(255, 255, 255, 0.1)', color: '#fff', border: '1px solid rgba(255, 255, 255, 0.2)', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
             >
               <RefreshCw size={14} className={loading ? 'spin-icon' : ''} /> Refresh Hub
+            </button>
+
+            <button
+              onClick={() => {
+                const firstOrderItem = orders.flatMap(o => o.items || [])[0];
+                setManualAllocateForm({
+                  orderItemId: firstOrderItem?.id || '',
+                  warehouseId: warehouses[0]?.id || '',
+                  notes: 'Manual warehouse allocation assigned by Administrator'
+                });
+                setShowManualAllocateModal(true);
+              }}
+              className="btn"
+              style={{ background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+            >
+              <Navigation size={14} /> Manually Allocate Order
             </button>
 
             <button
@@ -701,6 +777,22 @@ const WarehouseManagementTab = () => {
                     >
                       <Navigation size={13} /> Start Pick Operation
                     </button>
+
+                    <button
+                      onClick={() => {
+                        setManualAllocateForm({
+                          orderItemId: item.orderItemId || item.orderItem?.id || item.id,
+                          warehouseId: warehouses.find(w => w.id !== item.warehouseId)?.id || warehouses[0]?.id || '',
+                          notes: `Admin re-allocated from ${item.warehouseName || 'previous hub'} to new hub`
+                        });
+                        setShowManualAllocateModal(true);
+                      }}
+                      className="btn btn-secondary btn-sm"
+                      style={{ width: '100%', marginTop: '0.4rem', fontSize: '0.74rem', padding: '0.25rem 0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.3rem', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' }}
+                      title="Re-allocate order to a different warehouse hub"
+                    >
+                      <Navigation size={11} /> Re-Route / Change Hub
+                    </button>
                   </div>
                 ))
               )}
@@ -884,6 +976,16 @@ const WarehouseManagementTab = () => {
                   <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.3rem' }}>
                     Tracking: <strong>{item.trackingNumber}</strong> • {item.carrier}
                   </div>
+                  <div style={{ fontSize: '0.75rem', color: '#475569', marginTop: '0.2rem' }}>
+                    Customer: <strong>{item.customerName || 'Customer'}</strong>
+                  </div>
+                  <button
+                    onClick={() => handleDeliver(item.id)}
+                    className="btn btn-sm"
+                    style={{ width: '100%', marginTop: '0.6rem', background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontSize: '0.78rem' }}
+                  >
+                    <CheckCircle2 size={13} /> Confirm Delivery
+                  </button>
                 </div>
               ))}
             </div>
@@ -2345,6 +2447,122 @@ const WarehouseManagementTab = () => {
                 </button>
                 <button type="submit" disabled={actionLoading} className="btn btn-primary">
                   {actionLoading ? 'Distributing...' : 'Transfer Stock to Warehouse'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Order Allocation Modal (Admin) */}
+      {showManualAllocateModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '12px',
+            width: '100%',
+            maxWidth: '520px',
+            padding: '1.75rem',
+            boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Navigation size={20} color="#4f46e5" />
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                  Manual Order Allocation to Warehouse
+                </h3>
+              </div>
+              <button onClick={() => setShowManualAllocateModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '1.2rem' }}>
+                ✕
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem' }}>
+              As Administrator, manually assign or re-route customer orders to the best regional fulfillment warehouse (e.g. Kolkata, Mumbai, Delhi, Bangalore, Hyderabad).
+            </p>
+
+            <form onSubmit={handleManualAllocateSubmit}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#334155', marginBottom: '0.35rem' }}>
+                  Select Customer Order Item *
+                </label>
+                <select
+                  required
+                  value={manualAllocateForm.orderItemId}
+                  onChange={(e) => setManualAllocateForm({ ...manualAllocateForm, orderItemId: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.88rem' }}
+                >
+                  <option value="">-- Choose Order Item --</option>
+                  {orders.flatMap(o => (o.items || []).map(item => ({
+                    orderNumber: o.orderNumber,
+                    customerName: o.customer?.fullName || 'Customer',
+                    itemId: item.id,
+                    productTitle: item.product?.title || 'Product Item',
+                    quantity: item.quantity,
+                    status: o.status
+                  }))).map(item => (
+                    <option key={item.itemId} value={item.itemId}>
+                      {item.orderNumber} - {item.productTitle} (Qty: {item.quantity}) [{item.status}]
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#334155', marginBottom: '0.35rem' }}>
+                  Target Regional Warehouse Hub *
+                </label>
+                <select
+                  required
+                  value={manualAllocateForm.warehouseId}
+                  onChange={(e) => setManualAllocateForm({ ...manualAllocateForm, warehouseId: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.88rem' }}
+                >
+                  <option value="">-- Choose Target Warehouse --</option>
+                  {warehouses.map(wh => (
+                    <option key={wh.id} value={wh.id}>
+                      {wh.name} ({wh.code}) - {wh.city}, {wh.state}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#334155', marginBottom: '0.35rem' }}>
+                  Allocation Notes / Instructions:
+                </label>
+                <input
+                  type="text"
+                  value={manualAllocateForm.notes}
+                  onChange={(e) => setManualAllocateForm({ ...manualAllocateForm, notes: e.target.value })}
+                  style={{ width: '100%', padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.88rem' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button type="button" onClick={() => setShowManualAllocateModal(false)} className="btn btn-secondary">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={allocateLoading}
+                  className="btn btn-primary"
+                  style={{ background: '#4f46e5', borderColor: '#4f46e5', color: '#fff' }}
+                >
+                  {allocateLoading ? 'Allocating...' : 'Confirm Manual Allocation'}
                 </button>
               </div>
             </form>

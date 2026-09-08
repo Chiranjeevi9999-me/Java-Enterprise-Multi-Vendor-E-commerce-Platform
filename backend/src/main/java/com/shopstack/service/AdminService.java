@@ -26,6 +26,7 @@ public class AdminService {
     private final ReviewRepository reviewRepository;
     private final CommissionRepository commissionRepository;
     private final CommissionService commissionService;
+    private final OrderService orderService;
 
     public AdminService(ProductRepository productRepository,
                         UserRepository userRepository,
@@ -36,7 +37,8 @@ public class AdminService {
                         CategoryRepository categoryRepository,
                         ReviewRepository reviewRepository,
                         CommissionRepository commissionRepository,
-                        CommissionService commissionService) {
+                        CommissionService commissionService,
+                        OrderService orderService) {
         this.productRepository = productRepository;
         this.userRepository = userRepository;
         this.vendorProfileRepository = vendorProfileRepository;
@@ -47,6 +49,7 @@ public class AdminService {
         this.reviewRepository = reviewRepository;
         this.commissionRepository = commissionRepository;
         this.commissionService = commissionService;
+        this.orderService = orderService;
     }
 
     // 1. Overview System Stats
@@ -310,13 +313,7 @@ public class AdminService {
 
     @Transactional
     public Order updateOrderStatus(Long orderId, OrderStatus status) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found with ID: " + orderId));
-        order.setStatus(status);
-        if (status == OrderStatus.DELIVERED) {
-            order.setPaymentStatus(PaymentStatus.PAID);
-        }
-        return orderRepository.save(order);
+        return orderService.updateOrderStatus(orderId, status);
     }
 
     // 5. Commission Management Summary
