@@ -1,13 +1,25 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const getBaseUrl = () => {
+  let url = import.meta.env.VITE_API_URL;
+  if (!url) {
+    return '/api';
+  }
+  url = url.trim().replace(/\/+$/, '');
+  if ((url.startsWith('http://') || url.startsWith('https://')) && !url.endsWith('/api')) {
+    url = `${url}/api`;
+  }
+  return url;
+};
+
+const API_BASE_URL = getBaseUrl();
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000,
+  timeout: 30000,
 });
 
 // Interceptor to add JWT Bearer token

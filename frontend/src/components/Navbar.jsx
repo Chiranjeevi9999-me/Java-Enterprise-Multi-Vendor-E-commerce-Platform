@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { notificationApi } from '../api';
 import RoleBadge from './RoleBadge';
-import { Store, ShoppingCart, Heart, User as UserIcon, LogOut, ShieldCheck, Search, MapPin, ChevronDown, Sparkles, Layers, SlidersHorizontal, X, PackageCheck, Menu } from 'lucide-react';
+import { Store, ShoppingCart, Heart, User as UserIcon, LogOut, ShieldCheck, Search, MapPin, ChevronDown, Sparkles, Layers, SlidersHorizontal, X, PackageCheck, Menu, Bell, Check, Clock, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
 
 const Navbar = ({ searchQuery, setSearchQuery, selectedCategory, setSelectedCategory, categories = [] }) => {
   const { user, logout, isAdmin, isVendor } = useAuth();
@@ -11,8 +12,81 @@ const Navbar = ({ searchQuery, setSearchQuery, selectedCategory, setSelectedCate
   const [selectedCatId, setSelectedCatId] = useState(selectedCategory || '');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notifRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    if (user) {
+      fetchUnreadCount();
+      const interval = setInterval(fetchUnreadCount, 30000); // 30s poll
+      return () => clearInterval(interval);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setNotifOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await notificationApi.getUnreadCount();
+      if (res && res.data) {
+        setUnreadCount(res.data.unreadCount || 0);
+      }
+    } catch (e) {
+      // Ignore background network issues
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await notificationApi.getMyNotifications();
+      if (res && res.data) {
+        setNotifications(res.data);
+      }
+    } catch (e) {
+      console.error("Error fetching notifications:", e);
+    }
+  };
+
+  const toggleNotifDropdown = () => {
+    if (!notifOpen) {
+      fetchNotifications();
+      fetchUnreadCount();
+    }
+    setNotifOpen(!notifOpen);
+  };
+
+  const handleMarkAsRead = async (id) => {
+    try {
+      await notificationApi.markAsRead(id);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (e) {
+      console.error("Error marking read:", e);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await notificationApi.markAllAsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch (e) {
+      console.error("Error marking all read:", e);
+    }
+  };
+
 
   const isAuthPage = ['/login', '/register', '/forgot-password'].includes(location.pathname);
   const isHomePage = location.pathname === '/';
@@ -183,6 +257,164 @@ const Navbar = ({ searchQuery, setSearchQuery, selectedCategory, setSelectedCate
               <Link to="/admin" className="btn btn-secondary btn-sm" style={{ borderColor: 'rgba(236, 72, 153, 0.4)', color: '#f472b6' }}>
                 <ShieldCheck size={14} /> Admin
               </Link>
+            )}
+
+            {/* Notification Bell Dropdown */}
+            {user && (
+              <div ref={notifRef} style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={toggleNotifDropdown}
+                  className="btn btn-secondary btn-sm"
+                  style={{ position: 'relative', padding: '0.5rem 0.75rem' }}
+                  title="Notifications"
+                >
+                  <Bell size={17} color="#fff" />
+                  {unreadCount > 0 && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: '-6px',
+                        right: '-6px',
+                        background: '#ef4444',
+                        color: '#fff',
+                        borderRadius: '50%',
+                        width: '19px',
+                        height: '19px',
+                        fontSize: '0.7rem',
+                        fontWeight: 800,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 2px 8px rgba(239, 68, 68, 0.5)'
+                      }}
+                    >
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Dropdown Panel */}
+                {notifOpen && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 10px)',
+                      right: 0,
+                      width: '360px',
+                      maxHeight: '440px',
+                      background: 'rgba(15, 23, 42, 0.96)',
+                      backdropFilter: 'blur(16px)',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      borderRadius: '12px',
+                      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      zIndex: 1000,
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {/* Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', background: 'rgba(255, 255, 255, 0.02)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Bell size={16} color="#818cf8" />
+                        <span style={{ fontWeight: 700, fontSize: '0.9rem', color: '#fff' }}>Notifications</span>
+                        {unreadCount > 0 && (
+                          <span style={{ background: 'rgba(99, 102, 241, 0.2)', color: '#818cf8', fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: '9999px' }}>
+                            {unreadCount} new
+                          </span>
+                        )}
+                      </div>
+                      {unreadCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleMarkAllAsRead}
+                          style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                          <Check size={13} /> Mark all read
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Notification List */}
+                    <div style={{ overflowY: 'auto', flex: 1, padding: '6px' }}>
+                      {notifications.length === 0 ? (
+                        <div style={{ padding: '36px 16px', textAlign: 'center', color: '#64748b' }}>
+                          <Bell size={28} style={{ opacity: 0.4, margin: '0 auto 8px' }} />
+                          <p style={{ margin: 0, fontSize: '0.85rem' }}>No notifications yet</p>
+                          <p style={{ margin: '4px 0 0', fontSize: '0.75rem', opacity: 0.8 }}>Real-time updates will appear here</p>
+                        </div>
+                      ) : (
+                        notifications.map((n) => {
+                          const isUnread = !n.isRead;
+                          let typeColor = '#3b82f6';
+                          let typeBg = 'rgba(59, 130, 246, 0.15)';
+                          let typeLabel = 'Update';
+
+                          if (n.type === 'ORDER_PLACED') {
+                            typeColor = '#10b981';
+                            typeBg = 'rgba(16, 185, 129, 0.15)';
+                            typeLabel = 'Order Placed';
+                          } else if (n.type === 'PAYMENT_SUCCESS') {
+                            typeColor = '#6366f1';
+                            typeBg = 'rgba(99, 102, 241, 0.15)';
+                            typeLabel = 'Payment Success';
+                          } else if (n.type === 'PAYMENT_FAILED') {
+                            typeColor = '#ef4444';
+                            typeBg = 'rgba(239, 68, 68, 0.15)';
+                            typeLabel = 'Payment Failed';
+                          } else if (n.type === 'ORDER_SHIPPED') {
+                            typeColor = '#0284c7';
+                            typeBg = 'rgba(2, 132, 199, 0.15)';
+                            typeLabel = 'Shipped';
+                          } else if (n.type === 'ORDER_DELIVERED') {
+                            typeColor = '#16a34a';
+                            typeBg = 'rgba(22, 163, 74, 0.15)';
+                            typeLabel = 'Delivered';
+                          } else if (n.type === 'REFUND_COMPLETED') {
+                            typeColor = '#a855f7';
+                            typeBg = 'rgba(168, 85, 247, 0.15)';
+                            typeLabel = 'Refunded';
+                          }
+
+                          return (
+                            <div
+                              key={n.id}
+                              onClick={() => handleMarkAsRead(n.id)}
+                              style={{
+                                padding: '10px 12px',
+                                borderRadius: '8px',
+                                marginBottom: '4px',
+                                background: isUnread ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
+                                borderLeft: isUnread ? `3px solid ${typeColor}` : '3px solid transparent',
+                                cursor: 'pointer',
+                                transition: 'background 0.15s ease'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                <span style={{ background: typeBg, color: typeColor, fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: '4px' }}>
+                                  {typeLabel}
+                                </span>
+                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                                  {n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: '0.82rem', fontWeight: isUnread ? 700 : 500, color: isUnread ? '#fff' : '#94a3b8', lineHeight: 1.3 }}>
+                                {n.subject}
+                              </div>
+                              {n.referenceId && (
+                                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '3px', fontFamily: 'monospace' }}>
+                                  Ref: #{n.referenceId}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Shopping Cart Trigger */}

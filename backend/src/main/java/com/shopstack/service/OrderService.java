@@ -24,6 +24,7 @@ public class OrderService {
     private final CommissionService commissionService;
     private final CouponService couponService;
     private final WarehouseService warehouseService;
+    private final NotificationService notificationService;
 
     public OrderService(OrderRepository orderRepository,
                         ProductRepository productRepository,
@@ -32,7 +33,8 @@ public class OrderService {
                         PaymentRepository paymentRepository,
                         CommissionService commissionService,
                         CouponService couponService,
-                        WarehouseService warehouseService) {
+                        WarehouseService warehouseService,
+                        NotificationService notificationService) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
@@ -41,6 +43,7 @@ public class OrderService {
         this.commissionService = commissionService;
         this.couponService = couponService;
         this.warehouseService = warehouseService;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -180,6 +183,13 @@ public class OrderService {
                 couponService.recordCouponUsage(appliedCouponCode, savedOrder, customer, vendorSubtotal, vendorDiscount, vendorFinalAmount);
             }
 
+            // Real-time automatic notification trigger for Order Placed
+            try {
+                notificationService.sendOrderPlacedNotification(savedOrder);
+            } catch (Exception e) {
+                System.err.println("Failed to send order placed notification: " + e.getMessage());
+            }
+
             createdOrders.add(savedOrder);
         }
 
@@ -275,6 +285,21 @@ public class OrderService {
             } catch (Exception e) {
                 System.err.println("Warehouse auto-allocation notice: " + e.getMessage());
             }
+        }
+
+        // Real-time automatic notification triggers based on order lifecycle
+        try {
+            if (newStatus == OrderStatus.SHIPPED) {
+                notificationService.sendOrderShippedNotification(saved, "BlueDart Express / ShopStack Logistics", "TRK-ORD-" + saved.getId() + "890");
+            } else if (newStatus == OrderStatus.DELIVERED) {
+                notificationService.sendOrderDeliveredNotification(saved);
+            } else if (newStatus == OrderStatus.REFUNDED) {
+                notificationService.sendRefundCompletedNotification(saved, saved.getTotalAmount(), "Order refunded successfully.");
+            } else if (newStatus == OrderStatus.CANCELLED && saved.getPaymentStatus() == PaymentStatus.REFUNDED) {
+                notificationService.sendRefundCompletedNotification(saved, saved.getTotalAmount(), "Order cancelled and refund processed.");
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to trigger order status notification: " + e.getMessage());
         }
 
         return saved;

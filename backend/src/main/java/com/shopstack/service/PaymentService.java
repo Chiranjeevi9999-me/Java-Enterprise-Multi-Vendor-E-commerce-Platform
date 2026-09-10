@@ -25,6 +25,7 @@ public class PaymentService {
     private final CommissionService commissionService;
     private final CouponService couponService;
     private final WarehouseService warehouseService;
+    private final NotificationService notificationService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public PaymentService(RazorpayService razorpayService,
@@ -35,7 +36,8 @@ public class PaymentService {
                           VendorProfileRepository vendorProfileRepository,
                           CommissionService commissionService,
                           CouponService couponService,
-                          WarehouseService warehouseService) {
+                          WarehouseService warehouseService,
+                          NotificationService notificationService) {
         this.razorpayService = razorpayService;
         this.paymentRepository = paymentRepository;
         this.orderRepository = orderRepository;
@@ -45,6 +47,7 @@ public class PaymentService {
         this.commissionService = commissionService;
         this.couponService = couponService;
         this.warehouseService = warehouseService;
+        this.notificationService = notificationService;
     }
 
     /**
@@ -197,6 +200,15 @@ public class PaymentService {
                         couponService.recordCouponUsage(appliedCouponCode, ord, customer, ord.getSubtotalAmount(), ord.getDiscountAmount(), ord.getTotalAmount());
                     }
                 }
+
+                // Automatic real-time notification trigger for COD Order Placed
+                for (Order ord : pendingOrders) {
+                    try {
+                        notificationService.sendOrderPlacedNotification(ord);
+                    } catch (Exception e) {
+                        System.err.println("Failed to send COD order placed notification: " + e.getMessage());
+                    }
+                }
             } catch (Exception e) {
                 throw new RuntimeException("Error saving COD payment state: " + e.getMessage());
             }
@@ -273,7 +285,12 @@ public class PaymentService {
         if (!isValidSignature) {
             payment.setStatus(PaymentStatus.FAILED);
             payment.setFailureReason("Razorpay payment signature verification failed.");
-            paymentRepository.save(payment);
+            Payment failedPayment = paymentRepository.save(payment);
+            try {
+                notificationService.sendPaymentFailedNotification(failedPayment, "Razorpay payment signature verification failed.");
+            } catch (Exception e) {
+                System.err.println("Failed to send payment failed notification: " + e.getMessage());
+            }
             throw new RuntimeException("Payment verification failed! Invalid Razorpay signature.");
         }
 
@@ -285,6 +302,7 @@ public class PaymentService {
 
         // Parse order IDs
         List<Long> orderIds = parseOrderIds(payment.getOrderIdsJson());
+        List<Order> confirmedOrders = new ArrayList<>();
 
         // Update orders to CONFIRMED and deduct inventory stock EXACTLY ONCE
         for (Long orderId : orderIds) {
@@ -307,6 +325,7 @@ public class PaymentService {
 
                 Order savedOrder = orderRepository.save(order);
                 commissionService.createOrUpdateCommissionForOrder(savedOrder);
+                confirmedOrders.add(savedOrder);
 
                 try {
                     warehouseService.allocateOrder(savedOrder);
@@ -325,7 +344,21 @@ public class PaymentService {
                             savedOrder.getTotalAmount()
                     );
                 }
+
+                // Automatic real-time notification trigger for Order Placed
+                try {
+                    notificationService.sendOrderPlacedNotification(savedOrder);
+                } catch (Exception e) {
+                    System.err.println("Failed to send order placed notification: " + e.getMessage());
+                }
             }
+        }
+
+        // Automatic real-time notification trigger for Payment Successful
+        try {
+            notificationService.sendPaymentSuccessNotification(savedPayment, confirmedOrders);
+        } catch (Exception e) {
+            System.err.println("Failed to send payment success notification: " + e.getMessage());
         }
 
         return savedPayment;
@@ -339,7 +372,15 @@ public class PaymentService {
         if (payment.getStatus() != PaymentStatus.PAID) {
             payment.setStatus(PaymentStatus.FAILED);
             payment.setFailureReason(reason != null ? reason : "Payment cancelled or failed by customer.");
-            paymentRepository.save(payment);
+            Payment saved = paymentRepository.save(payment);
+
+            // Automatic real-time notification trigger for Payment Failed
+            try {
+                notificationService.sendPaymentFailedNotification(saved, saved.getFailureReason());
+            } catch (Exception e) {
+                System.err.println("Failed to send payment failed notification: " + e.getMessage());
+            }
+            return saved;
         }
         return payment;
     }

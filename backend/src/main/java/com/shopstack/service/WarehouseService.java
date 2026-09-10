@@ -23,6 +23,7 @@ public class WarehouseService {
     private final ReturnRequestRepository returnRequestRepository;
     private final UserRepository userRepository;
     private final PaymentRepository paymentRepository;
+    private final NotificationService notificationService;
 
     public WarehouseService(WarehouseRepository warehouseRepository,
                             WarehouseInventoryRepository inventoryRepository,
@@ -33,7 +34,8 @@ public class WarehouseService {
                             OrderItemRepository orderItemRepository,
                             ReturnRequestRepository returnRequestRepository,
                             UserRepository userRepository,
-                            PaymentRepository paymentRepository) {
+                            PaymentRepository paymentRepository,
+                            NotificationService notificationService) {
         this.warehouseRepository = warehouseRepository;
         this.inventoryRepository = inventoryRepository;
         this.allocationRepository = allocationRepository;
@@ -44,6 +46,7 @@ public class WarehouseService {
         this.returnRequestRepository = returnRequestRepository;
         this.userRepository = userRepository;
         this.paymentRepository = paymentRepository;
+        this.notificationService = notificationService;
     }
 
     // ==========================================
@@ -661,6 +664,13 @@ public class WarehouseService {
             orderRepository.save(order);
         }
 
+        // Automatic real-time notification trigger for Order Shipped
+        try {
+            notificationService.sendOrderShippedNotification(order, allocation.getCarrier(), allocation.getTrackingNumber());
+        } catch (Exception e) {
+            System.err.println("Failed to send shipment dispatch notification: " + e.getMessage());
+        }
+
         // Log Stock Movement
         StockMovement movement = StockMovement.builder()
                 .warehouse(allocation.getWarehouse())
@@ -703,6 +713,13 @@ public class WarehouseService {
             order.setStatus(OrderStatus.DELIVERED);
             order.setPaymentStatus(PaymentStatus.PAID);
             orderRepository.save(order);
+
+            // Automatic real-time notification trigger for Order Delivered
+            try {
+                notificationService.sendOrderDeliveredNotification(order);
+            } catch (Exception e) {
+                System.err.println("Failed to send order delivery notification: " + e.getMessage());
+            }
         }
 
         // Log Stock Movement
@@ -1212,6 +1229,17 @@ public class WarehouseService {
         }
 
         ReturnRequest saved = returnRequestRepository.save(returnReq);
+
+        // Automatic real-time notification trigger for Refund Completed
+        try {
+            double refundAmt = (saved.getRefundAmount() != null && saved.getRefundAmount() > 0)
+                    ? saved.getRefundAmount()
+                    : (order.getTotalAmount() != null ? order.getTotalAmount() : 0.0);
+            notificationService.sendRefundCompletedNotification(order, refundAmt, saved.getQcNotes());
+        } catch (Exception e) {
+            System.err.println("Failed to send refund completed notification: " + e.getMessage());
+        }
+
         return mapToReturnResponseDTO(saved);
     }
 
