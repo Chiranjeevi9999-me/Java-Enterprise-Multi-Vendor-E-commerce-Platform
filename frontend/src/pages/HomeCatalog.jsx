@@ -13,6 +13,7 @@ const HomeCatalog = ({ searchQuery, selectedCategory, setSelectedCategory, categ
   const [products, setProducts] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const catalogRef = useRef(null);
 
   const scrollToCatalog = () => {
@@ -21,16 +22,27 @@ const HomeCatalog = ({ searchQuery, selectedCategory, setSelectedCategory, categ
     }
   };
 
-  useEffect(() => {
+  const fetchProducts = () => {
     setLoading(true);
+    setError(null);
     const params = {};
     if (selectedCategory) params.categoryId = selectedCategory;
     if (searchQuery) params.search = searchQuery;
 
     productApi.getAll(params)
-      .then(res => setProducts(res.data))
-      .catch(err => console.error('Failed to fetch products:', err))
+      .then(res => {
+        setProducts(res.data || []);
+        setError(null);
+      })
+      .catch(err => {
+        console.error('Failed to fetch products:', err);
+        setError('Unable to reach the multi-vendor backend server. Please verify your connection.');
+      })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchProducts();
   }, [selectedCategory, searchQuery]);
 
   // Dynamic Partitioning for Sections (when no explicit filter is applied)
@@ -93,6 +105,23 @@ const HomeCatalog = ({ searchQuery, selectedCategory, setSelectedCategory, categ
           <div style={{ textAlign: 'center', padding: '5rem 0', color: 'var(--text-muted)' }}>
             <RefreshCw size={28} className="spin-icon" style={{ marginBottom: '1rem', color: 'var(--primary)' }} />
             <p style={{ fontSize: '1rem' }}>Loading multi-vendor marketplace inventory...</p>
+          </div>
+        ) : error ? (
+          /* Error State with Retry Button */
+          <div className="glass-panel" style={{ textAlign: 'center', padding: '3.5rem 2rem', marginTop: '1.5rem', borderRadius: 'var(--radius-xl)', borderColor: 'rgba(239, 68, 68, 0.3)', background: 'rgba(239, 68, 68, 0.05)' }}>
+            <div style={{ width: '54px', height: '54px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem', color: '#f87171' }}>
+              <RefreshCw size={24} />
+            </div>
+            <h3 style={{ color: '#fff', fontSize: '1.25rem', marginBottom: '0.5rem' }}>Unable to Load Products</h3>
+            <p style={{ color: '#fca5a5', fontSize: '0.9rem', marginBottom: '0.5rem', maxWidth: '500px', margin: '0 auto 0.75rem auto' }}>
+              {error}
+            </p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginBottom: '1.5rem' }}>
+              If connecting from a mobile device or tablet, ensure your device is connected to the same network as the host server.
+            </p>
+            <button onClick={fetchProducts} className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', margin: '0 auto' }}>
+              <RefreshCw size={14} /> Retry Connection
+            </button>
           </div>
         ) : products.length === 0 ? (
           /* Empty State */

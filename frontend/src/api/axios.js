@@ -2,10 +2,26 @@ import axios from 'axios';
 
 const getBaseUrl = () => {
   let url = import.meta.env.VITE_API_URL;
-  if (!url) {
+
+  // Default to relative /api when not explicitly configured or set to /api
+  if (!url || url.trim() === '' || url.trim() === '/api') {
     return '/api';
   }
+
   url = url.trim().replace(/\/+$/, '');
+
+  // If accessed from a remote device/mobile phone on the local network (e.g. 192.168.x.x or custom host)
+  // and url contains localhost or 127.0.0.1, dynamic rewrite to the browser's hostname
+  // so mobile devices reach the host machine running the backend rather than the mobile device itself.
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    const currentHost = window.location.hostname;
+    const isLocalhost = currentHost === 'localhost' || currentHost === '127.0.0.1';
+
+    if (!isLocalhost && (url.includes('localhost') || url.includes('127.0.0.1'))) {
+      url = url.replace(/localhost/g, currentHost).replace(/127\.0\.0\.1/g, currentHost);
+    }
+  }
+
   if ((url.startsWith('http://') || url.startsWith('https://')) && !url.endsWith('/api')) {
     url = `${url}/api`;
   }
