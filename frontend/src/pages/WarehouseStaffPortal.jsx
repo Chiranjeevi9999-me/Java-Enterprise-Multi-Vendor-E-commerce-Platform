@@ -680,7 +680,7 @@ const WarehouseStaffPortal = () => {
             </div>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-responsive-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
               <thead>
                 <tr style={{ background: '#0f172a', borderBottom: '2px solid #1e293b', color: '#94a3b8' }}>
@@ -799,7 +799,7 @@ const WarehouseStaffPortal = () => {
             </button>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-responsive-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
               <thead>
                 <tr style={{ background: '#0f172a', borderBottom: '2px solid #1e293b', color: '#94a3b8' }}>
@@ -864,7 +864,7 @@ const WarehouseStaffPortal = () => {
             Immutable Stock Movement Audit Log ({currentWarehouse?.name})
           </h3>
 
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-responsive-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
               <thead>
                 <tr style={{ background: '#0f172a', borderBottom: '2px solid #1e293b', color: '#94a3b8' }}>

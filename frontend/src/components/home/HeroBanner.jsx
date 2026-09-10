@@ -157,7 +157,7 @@ const HeroBanner = ({ onExploreClick }) => {
         </div>
 
         {/* Slider Navigation Buttons */}
-        <div style={{ position: 'absolute', bottom: '1.25rem', right: '2rem', zIndex: 10, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="hero-banner-controls" style={{ position: 'absolute', bottom: '1.25rem', right: '2rem', zIndex: 10, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <button
             onClick={() => setCurrentSlide((prev) => (prev - 1 + BANNERS.length) % BANNERS.length)}
             style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.12)', border: '1px solid rgba(255, 255, 255, 0.2)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}

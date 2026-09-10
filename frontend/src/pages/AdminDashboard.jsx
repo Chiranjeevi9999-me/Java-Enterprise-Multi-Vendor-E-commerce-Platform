@@ -871,7 +871,7 @@ const AdminDashboard = () => {
               </button>
             </div>
 
-            <div style={{ overflowX: 'auto' }}>
+            <div className="table-responsive-wrapper">
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-subtle)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
@@ -948,7 +948,7 @@ const AdminDashboard = () => {
             </div>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-responsive-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-subtle)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
@@ -1295,7 +1295,7 @@ const AdminDashboard = () => {
                 <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#fff', marginBottom: '1rem' }}>
                   Top Performing Products by Gross Volume
                 </h3>
-                <div style={{ overflowX: 'auto' }}>
+                <div className="table-responsive-wrapper">
                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-subtle)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
@@ -1380,7 +1380,7 @@ const AdminDashboard = () => {
           </div>
 
           {/* Orders Table */}
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-responsive-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-subtle)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
@@ -1852,7 +1852,7 @@ const AdminDashboard = () => {
             </div>
 
             {/* Audit Table */}
-            <div style={{ overflowX: 'auto' }}>
+            <div className="table-responsive-wrapper">
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-subtle)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
@@ -1956,7 +1956,7 @@ const AdminDashboard = () => {
               Store-level overview of sales volume, platform retention rate, and net disbursals. Click Adjust Rate to configure individual merchant fees.
             </p>
 
-            <div style={{ overflowX: 'auto' }}>
+            <div className="table-responsive-wrapper">
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-subtle)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
@@ -2175,7 +2175,7 @@ const AdminDashboard = () => {
             </div>
 
             {/* Coupons Table */}
-            <div style={{ overflowX: 'auto' }}>
+            <div className="table-responsive-wrapper">
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-subtle)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
@@ -2312,7 +2312,7 @@ const AdminDashboard = () => {
               Detailed chronological record of customer purchases with applied coupon discounts.
             </p>
 
-            <div style={{ overflowX: 'auto' }}>
+            <div className="table-responsive-wrapper">
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-subtle)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
@@ -2484,7 +2484,7 @@ const AdminDashboard = () => {
               )}
 
               {/* Data Table */}
-              <div style={{ overflowX: 'auto' }}>
+              <div className="table-responsive-wrapper">
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-subtle)', fontSize: '0.75rem', textTransform: 'uppercase' }}>
@@ -2537,7 +2537,7 @@ const AdminDashboard = () => {
             Manage platform accounts across Administrators, Vendors, and Customers.
           </p>
 
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-responsive-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-subtle)', fontSize: '0.75rem', textTransform: 'uppercase' }}>

@@ -1014,7 +1014,7 @@ const WarehouseManagementTab = () => {
             </div>
           </div>
 
-          <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
+          <div className="card table-responsive-wrapper" style={{ overflowX: 'auto', padding: 0 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -1244,7 +1244,7 @@ const WarehouseManagementTab = () => {
           </div>
 
           {/* Inventory Table */}
-          <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
+          <div className="card table-responsive-wrapper" style={{ overflowX: 'auto', padding: 0 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -1505,7 +1505,7 @@ const WarehouseManagementTab = () => {
           </div>
 
           {/* Audit Log Table */}
-          <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
+          <div className="card table-responsive-wrapper" style={{ overflowX: 'auto', padding: 0 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>

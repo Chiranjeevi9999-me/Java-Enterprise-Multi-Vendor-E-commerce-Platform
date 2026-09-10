@@ -100,47 +100,51 @@ const CartPage = () => {
             return (
               <div
                 key={product.id}
+                className="cart-item-row"
                 style={{ 
                   display: 'flex', 
                   gap: '1.25rem', 
                   padding: '1.25rem', 
-                  background: '#111827',
+                  background: '#111827', 
                   borderRadius: '12px', 
                   border: '1px solid #1f2937',
-                  flexWrap: 'wrap',
-                  alignItems: 'center'
+                  alignItems: 'center',
+                  width: '100%'
                 }}
               >
-                {/* Thumbnail */}
-                <div style={{ position: 'relative', width: '90px', height: '90px', flexShrink: 0 }}>
-                  <img src={product.imageUrl} alt={product.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px', background: '#0f172a' }} />
-                  {hasDiscount && (
-                    <span style={{ position: 'absolute', top: '-6px', left: '-6px', background: '#ef4444', color: '#fff', fontSize: '0.62rem', fontWeight: 800, padding: '2px 5px', borderRadius: '4px' }}>
-                      {Math.round(((originalPrice - currentPrice) / originalPrice) * 100)}% OFF
-                    </span>
-                  )}
-                </div>
-                
-                {/* Product Title & Seller */}
-                <div style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: '#f8fafc', lineHeight: 1.3 }}>{product.title}</h3>
-                  <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
-                    Seller: <strong style={{ color: '#cbd5e1' }}>{product.vendorProfile?.storeName || 'Verified Vendor'}</strong>
-                  </div>
-                  
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginTop: '0.15rem' }}>
-                    <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f8fafc' }}>₹{formatPrice(currentPrice)}</span>
+                {/* Product Info Row (Thumbnail + Details) */}
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flex: '1 1 280px', minWidth: 0 }}>
+                  {/* Thumbnail */}
+                  <div style={{ position: 'relative', width: '80px', height: '80px', flexShrink: 0 }}>
+                    <img src={product.imageUrl} alt={product.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px', background: '#0f172a' }} />
                     {hasDiscount && (
-                      <span style={{ fontSize: '0.82rem', color: '#64748b', textDecoration: 'line-through' }}>₹{formatPrice(originalPrice)}</span>
+                      <span style={{ position: 'absolute', top: '-6px', left: '-6px', background: '#ef4444', color: '#fff', fontSize: '0.62rem', fontWeight: 800, padding: '2px 5px', borderRadius: '4px' }}>
+                        {Math.round(((originalPrice - currentPrice) / originalPrice) * 100)}% OFF
+                      </span>
                     )}
                   </div>
-                  {isNearStockLimit && (
-                    <span style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 600 }}>Max stock limit ({product.stockQuantity} available)</span>
-                  )}
+                  
+                  {/* Product Title & Seller */}
+                  <div style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#f8fafc', lineHeight: 1.3 }}>{product.title}</h3>
+                    <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
+                      Seller: <strong style={{ color: '#cbd5e1' }}>{product.vendorProfile?.storeName || 'Verified Vendor'}</strong>
+                    </div>
+                    
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginTop: '0.15rem' }}>
+                      <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f8fafc' }}>₹{formatPrice(currentPrice)}</span>
+                      {hasDiscount && (
+                        <span style={{ fontSize: '0.82rem', color: '#64748b', textDecoration: 'line-through' }}>₹{formatPrice(originalPrice)}</span>
+                      )}
+                    </div>
+                    {isNearStockLimit && (
+                      <span style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 600 }}>Max stock limit ({product.stockQuantity} available)</span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Quantity Controls & Subtotal */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1.25rem', marginLeft: 'auto', flexWrap: 'wrap' }}>
+                <div className="cart-item-controls-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1.25rem', marginLeft: 'auto', flexWrap: 'wrap' }}>
                   
                   {/* Quantity Counter */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: '#030712', border: '1px solid #1f2937', borderRadius: '8px', padding: '4px 8px' }}>

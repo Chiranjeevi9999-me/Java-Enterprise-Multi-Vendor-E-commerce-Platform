@@ -296,24 +296,7 @@ const Navbar = ({ searchQuery, setSearchQuery, selectedCategory, setSelectedCate
 
                 {/* Dropdown Panel */}
                 {notifOpen && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: 'calc(100% + 10px)',
-                      right: 0,
-                      width: '360px',
-                      maxHeight: '440px',
-                      background: 'rgba(15, 23, 42, 0.96)',
-                      backdropFilter: 'blur(16px)',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
-                      borderRadius: '12px',
-                      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      zIndex: 1000,
-                      overflow: 'hidden'
-                    }}
-                  >
+                  <div className="notif-dropdown-panel">
                     {/* Header */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', background: 'rgba(255, 255, 255, 0.02)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -489,8 +472,8 @@ const Navbar = ({ searchQuery, setSearchQuery, selectedCategory, setSelectedCate
 
           </div>
 
-          {/* Mobile Right Controls: Search Toggle, Cart, Hamburger Menu */}
-          <div className="show-on-mobile" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {/* Mobile Right Controls: Notification Bell, Search Toggle, Cart, Hamburger Menu */}
+          <div className="show-on-mobile" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             
             {!isAuthPage && (
               <button
@@ -501,6 +484,112 @@ const Navbar = ({ searchQuery, setSearchQuery, selectedCategory, setSelectedCate
               >
                 <Search size={18} />
               </button>
+            )}
+
+            {/* Mobile Notification Bell */}
+            {user && (
+              <div style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={toggleNotifDropdown}
+                  className="btn btn-secondary btn-sm"
+                  style={{ position: 'relative', padding: '0.45rem', borderRadius: 'var(--radius-sm)' }}
+                  title="Notifications"
+                >
+                  <Bell size={18} color="#fff" />
+                  {unreadCount > 0 && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: '-4px',
+                        right: '-4px',
+                        background: '#ef4444',
+                        color: '#fff',
+                        borderRadius: '50%',
+                        width: '17px',
+                        height: '17px',
+                        fontSize: '0.65rem',
+                        fontWeight: 800,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 2px 8px rgba(239, 68, 68, 0.5)'
+                      }}
+                    >
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Mobile Notification Dropdown */}
+                {notifOpen && (
+                  <div className="notif-dropdown-panel" style={{ position: 'fixed', top: '65px', left: '12px', right: '12px', width: 'auto', maxWidth: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', background: 'rgba(255, 255, 255, 0.02)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Bell size={15} color="#818cf8" />
+                        <span style={{ fontWeight: 700, fontSize: '0.88rem', color: '#fff' }}>Notifications</span>
+                        {unreadCount > 0 && (
+                          <span style={{ background: 'rgba(99, 102, 241, 0.2)', color: '#818cf8', fontSize: '0.7rem', fontWeight: 700, padding: '1px 6px', borderRadius: '9999px' }}>
+                            {unreadCount} new
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {unreadCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleMarkAllAsRead}
+                            style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}
+                          >
+                            <Check size={12} /> Mark read
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setNotifOpen(false)}
+                          style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ overflowY: 'auto', maxHeight: '340px', padding: '6px' }}>
+                      {notifications.length === 0 ? (
+                        <div style={{ padding: '28px 14px', textAlign: 'center', color: '#64748b' }}>
+                          <Bell size={24} style={{ opacity: 0.4, margin: '0 auto 6px' }} />
+                          <p style={{ margin: 0, fontSize: '0.82rem' }}>No notifications yet</p>
+                        </div>
+                      ) : (
+                        notifications.map((n) => (
+                          <div
+                            key={n.id}
+                            onClick={() => handleMarkAsRead(n.id)}
+                            style={{
+                              padding: '8px 10px',
+                              borderRadius: '6px',
+                              marginBottom: '4px',
+                              background: !n.isRead ? 'rgba(255, 255, 255, 0.05)' : 'transparent',
+                              borderLeft: !n.isRead ? '3px solid #6366f1' : '3px solid transparent',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
+                              <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#818cf8' }}>{n.type}</span>
+                              <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                                {n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.8rem', fontWeight: !n.isRead ? 700 : 500, color: !n.isRead ? '#fff' : '#94a3b8', lineHeight: 1.3 }}>
+                              {n.subject}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             <Link
